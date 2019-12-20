@@ -158,10 +158,7 @@ impl MaxRectsBin {
             self.find_placement_for_cut_piece(cut_piece, rect_choice)
         {
             for i in (0..self.free_rects.len()).rev() {
-                let free_rect = self.free_rects[i];
-                if self.split_free_rect(&free_rect, &best_rect) {
-                    self.free_rects.swap_remove(i);
-                }
+                self.split_free_rect(i, &best_rect);
             }
 
             self.prune_free_rects();
@@ -497,7 +494,9 @@ impl MaxRectsBin {
         score
     }
 
-    fn split_free_rect(&mut self, free_rect: &Rect, rect: &Rect) -> bool {
+    fn split_free_rect(&mut self, free_rect_index: usize, rect: &Rect) {
+        let free_rect = self.free_rects[free_rect_index];
+
         // Account for blade width.
         let rect = {
             let x = if rect.x >= self.blade_width {
@@ -533,20 +532,20 @@ impl MaxRectsBin {
             || rect.y >= free_rect.y + free_rect.length
             || rect.y + rect.length <= free_rect.y
         {
-            return false;
+            return;
         }
 
         if rect.x < free_rect.x + free_rect.width && rect.x + rect.width > free_rect.x {
             // New rect above
             if rect.y > free_rect.y && rect.y < free_rect.y + free_rect.length {
-                let mut new_rect = *free_rect;
+                let mut new_rect = free_rect;
                 new_rect.length = rect.y - new_rect.y;
                 self.free_rects.push(new_rect);
             }
 
             // New rect below
             if rect.y + rect.length < free_rect.y + free_rect.length {
-                let mut new_rect = *free_rect;
+                let mut new_rect = free_rect;
                 new_rect.y = rect.y + rect.length;
                 new_rect.length = free_rect.y + free_rect.length - rect.y - rect.length;
                 self.free_rects.push(new_rect);
@@ -556,21 +555,22 @@ impl MaxRectsBin {
         if rect.y < free_rect.y + free_rect.length && rect.y + rect.length > free_rect.y {
             // New rect to the left
             if rect.x > free_rect.x && rect.x < free_rect.x + free_rect.width {
-                let mut new_rect = *free_rect;
+                let mut new_rect = free_rect;
                 new_rect.width = rect.x - new_rect.x;
                 self.free_rects.push(new_rect);
             }
 
             // New rect to the right
             if rect.x + rect.width < free_rect.x + free_rect.width {
-                let mut new_rect = *free_rect;
+                let mut new_rect = free_rect;
                 new_rect.x = rect.x + rect.width;
                 new_rect.width = free_rect.x + free_rect.width - rect.x - rect.width;
                 self.free_rects.push(new_rect);
             }
         }
 
-        true
+        // Remove original free rect that was split.
+        self.free_rects.swap_remove(free_rect_index);
     }
 
     // Remove free rects that are contained by other free rects.
@@ -588,28 +588,25 @@ impl MaxRectsBin {
 
     fn make_free_rects_disjoint(&mut self) {
         let length = self.free_rects.len();
-        for i in (0..length).rev() {
+        'outer: for i in (0..length).rev() {
             for j in (i + 1..length).rev() {
+                // It's possible that self.free_rects gets smaller
+                // so we must check we haven't iterated too far.
+                if j >= self.free_rects.len() {
+                    break;
+                }
+                if i >= self.free_rects.len() {
+                    break 'outer;
+                }
+
                 if self.free_rects[i].width as u64 * self.free_rects[i].length as u64
                     > self.free_rects[j].width as u64 * self.free_rects[j].length as u64
                 {
-                    let old_len = self.free_rects.len();
-                    let rect_to_split = self.free_rects[j];
                     let rect = self.free_rects[i];
-                    if self.split_free_rect(&rect_to_split, &rect)
-                        && old_len < self.free_rects.len()
-                    {
-                        self.free_rects.swap_remove(j);
-                    }
+                    self.split_free_rect(j, &rect);
                 } else {
-                    let old_len = self.free_rects.len();
-                    let rect_to_split = self.free_rects[i];
                     let rect = self.free_rects[j];
-                    if self.split_free_rect(&rect_to_split, &rect)
-                        && old_len < self.free_rects.len()
-                    {
-                        self.free_rects.swap_remove(i);
-                    }
+                    self.split_free_rect(i, &rect);
                 }
             }
         }
