@@ -20,10 +20,10 @@ use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 
 #[cfg(feature = "serialize")]
-use serde_derive::Serialize;
+use serde_derive::{Serialize, Deserialize};
 
 /// Indicates the linear direction of a pattern, grain, etc.
-#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub enum PatternDirection {
     /// No pattern
@@ -163,7 +163,7 @@ impl Into<ResultCutPiece> for UsedCutPiece {
 }
 
 /// A cut piece that has been placed in a solution by the optimizer.
-#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serialize", serde(rename_all = "camelCase"))]
 #[derive(Clone, Debug)]
 pub struct ResultCutPiece {
@@ -218,7 +218,7 @@ impl StockPiece {
 }
 
 /// Stock piece that was used by the optimizer to get one or more cut pieces.
-#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serialize", serde(rename_all = "camelCase"))]
 #[derive(Clone, Debug)]
 pub struct ResultStockPiece {
@@ -239,7 +239,7 @@ pub struct ResultStockPiece {
 }
 
 /// A rectangle
-#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serialize", serde(rename_all = "camelCase"))]
 #[derive(Copy, Clone, Debug, Default)]
 pub struct Rect {
@@ -659,7 +659,7 @@ fn no_fit_for_cut_piece_error(cut_piece: &CutPieceWithId) -> Error {
 type Result<T> = std::result::Result<T, Error>;
 
 /// A valid solution to an optimization.
-#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serialize", serde(rename_all = "camelCase"))]
 pub struct Solution {
     /// Fitness score for this solution.
