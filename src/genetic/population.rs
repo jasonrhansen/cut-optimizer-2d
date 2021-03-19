@@ -121,7 +121,7 @@ impl<T: Unit> Population<T> {
     /// 0.5 * 0.9 * 100 = 45%
     ///
     pub fn set_survival_factor(&mut self, survival_factor: f64) -> &mut Self {
-        assert!(survival_factor >= 0.0 && survival_factor <= 1.0);
+        assert!((0.0..=1.0).contains(&survival_factor));
         self.survival_factor = survival_factor;
         self
     }
@@ -152,7 +152,7 @@ impl<T: Unit> Population<T> {
         let surviving_parents = (breeders.len() as f64 * self.survival_factor).ceil() as usize;
 
         for i in 0..self.max_size - surviving_parents {
-            let rs = rng.gen_range(0, breeders.len());
+            let rs = rng.gen_range(0..breeders.len());
             units.push(LazyUnit::from(
                 breeders[i % breeders.len()]
                     .unit

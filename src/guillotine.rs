@@ -24,7 +24,7 @@ pub(crate) enum FreeRectChoiceHeuristic {
 impl Distribution<FreeRectChoiceHeuristic> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> FreeRectChoiceHeuristic {
         // Don't include the "worst fit" heuristics here since they tend to give worse results.
-        match rng.gen_range(0, 3) {
+        match rng.gen_range(0..3) {
             0 => FreeRectChoiceHeuristic::BestAreaFit,
             1 => FreeRectChoiceHeuristic::BestShortSideFit,
             _ => FreeRectChoiceHeuristic::BestLongSideFit,
@@ -45,7 +45,7 @@ pub(crate) enum SplitHeuristic {
 
 impl Distribution<SplitHeuristic> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> SplitHeuristic {
-        match rng.gen_range(0, 6) {
+        match rng.gen_range(0..6) {
             0 => SplitHeuristic::ShorterLeftoverAxis,
             1 => SplitHeuristic::LongerLeftoverAxis,
             2 => SplitHeuristic::MinimizeArea,

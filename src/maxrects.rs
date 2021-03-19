@@ -20,7 +20,7 @@ pub(crate) enum FreeRectChoiceHeuristic {
 
 impl Distribution<FreeRectChoiceHeuristic> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> FreeRectChoiceHeuristic {
-        match rng.gen_range(0, 5) {
+        match rng.gen_range(0..5) {
             0 => FreeRectChoiceHeuristic::BestShortSideFit,
             1 => FreeRectChoiceHeuristic::BestLongSideFit,
             2 => FreeRectChoiceHeuristic::BestAreaFit,

@@ -557,9 +557,9 @@ where
         R: Rng + ?Sized,
         B: Clone,
     {
-        let cross_dest = rng.gen_range(0, self.bins.len() + 1);
-        let cross_src_start = rng.gen_range(0, other.bins.len());
-        let cross_src_end = rng.gen_range(cross_src_start + 1, other.bins.len() + 1);
+        let cross_dest = rng.gen_range(0..self.bins.len() + 1);
+        let cross_src_start = rng.gen_range(0..other.bins.len());
+        let cross_src_end = rng.gen_range(cross_src_start + 1..other.bins.len() + 1);
 
         let mut new_unit = OptimizerUnit {
             // Inject bins between crossing sites of other.
@@ -608,7 +608,7 @@ where
     where
         R: Rng + ?Sized,
     {
-        if let 1 = rng.gen_range(0, 20) {
+        if let 1 = rng.gen_range(0..20) {
             self.inversion(rng)
         }
     }
@@ -618,8 +618,8 @@ where
     where
         R: Rng + ?Sized,
     {
-        let start = rng.gen_range(0, self.bins.len());
-        let end = rng.gen_range(start, self.bins.len());
+        let start = rng.gen_range(0..self.bins.len());
+        let end = rng.gen_range(start..self.bins.len());
         self.bins[start..end].reverse();
     }
 }
