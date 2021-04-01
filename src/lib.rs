@@ -890,28 +890,28 @@ mod test {
 
     static CUT_PIECES: &[CutPiece] = &[
         CutPiece {
-            external_id: 1,
+            external_id: Some(1),
             width: 10,
             length: 30,
             pattern_direction: PatternDirection::None,
             can_rotate: true,
         },
         CutPiece {
-            external_id: 2,
+            external_id: Some(2),
             width: 20,
             length: 30,
             pattern_direction: PatternDirection::None,
             can_rotate: true,
         },
         CutPiece {
-            external_id: 3,
+            external_id: Some(3),
             width: 30,
             length: 30,
             pattern_direction: PatternDirection::None,
             can_rotate: true,
         },
         CutPiece {
-            external_id: 4,
+            external_id: Some(4),
             width: 40,
             length: 30,
             pattern_direction: PatternDirection::None,
@@ -940,7 +940,7 @@ mod test {
                 pattern_direction: PatternDirection::None,
             })
             .add_cut_piece(CutPiece {
-                external_id: 1,
+                external_id: Some(1),
                 width: 11,
                 length: 10,
                 pattern_direction: PatternDirection::None,
@@ -962,7 +962,7 @@ mod test {
                 pattern_direction: PatternDirection::ParallelToWidth,
             })
             .add_cut_piece(CutPiece {
-                external_id: 1,
+                external_id: Some(1),
                 width: 11,
                 length: 10,
                 pattern_direction: PatternDirection::ParallelToLength,
@@ -984,7 +984,7 @@ mod test {
                 pattern_direction: PatternDirection::None,
             })
             .add_cut_piece(CutPiece {
-                external_id: 1,
+                external_id: Some(1),
                 width: 11,
                 length: 10,
                 pattern_direction: PatternDirection::None,
@@ -1011,7 +1011,7 @@ mod test {
                 pattern_direction: PatternDirection::None,
             })
             .add_cut_piece(CutPiece {
-                external_id: 1,
+                external_id: Some(1),
                 width: 11,
                 length: 10,
                 pattern_direction: PatternDirection::None,
@@ -1038,7 +1038,7 @@ mod test {
                 pattern_direction: PatternDirection::ParallelToWidth,
             })
             .add_cut_piece(CutPiece {
-                external_id: 1,
+                external_id: Some(1),
                 width: 11,
                 length: 10,
                 pattern_direction: PatternDirection::ParallelToLength,
@@ -1065,7 +1065,7 @@ mod test {
                 pattern_direction: PatternDirection::None,
             })
             .add_cut_piece(CutPiece {
-                external_id: 1,
+                external_id: Some(1),
                 width: 11,
                 length: 10,
                 pattern_direction: PatternDirection::ParallelToWidth,
@@ -1104,7 +1104,7 @@ mod test {
                 pattern_direction: PatternDirection::None,
             })
             .add_cut_piece(CutPiece {
-                external_id: 1,
+                external_id: Some(1),
                 width: 11,
                 length: 10,
                 pattern_direction: PatternDirection::None,
@@ -1126,7 +1126,7 @@ mod test {
                 pattern_direction: PatternDirection::ParallelToWidth,
             })
             .add_cut_piece(CutPiece {
-                external_id: 1,
+                external_id: Some(1),
                 width: 11,
                 length: 10,
                 pattern_direction: PatternDirection::ParallelToLength,
@@ -1148,7 +1148,7 @@ mod test {
                 pattern_direction: PatternDirection::None,
             })
             .add_cut_piece(CutPiece {
-                external_id: 1,
+                external_id: Some(1),
                 width: 11,
                 length: 10,
                 pattern_direction: PatternDirection::None,
@@ -1175,7 +1175,7 @@ mod test {
                 pattern_direction: PatternDirection::None,
             })
             .add_cut_piece(CutPiece {
-                external_id: 1,
+                external_id: Some(1),
                 width: 11,
                 length: 10,
                 pattern_direction: PatternDirection::None,
@@ -1202,7 +1202,7 @@ mod test {
                 pattern_direction: PatternDirection::ParallelToWidth,
             })
             .add_cut_piece(CutPiece {
-                external_id: 1,
+                external_id: Some(1),
                 width: 11,
                 length: 10,
                 pattern_direction: PatternDirection::ParallelToLength,
@@ -1229,7 +1229,7 @@ mod test {
                 pattern_direction: PatternDirection::None,
             })
             .add_cut_piece(CutPiece {
-                external_id: 1,
+                external_id: Some(1),
                 width: 11,
                 length: 10,
                 pattern_direction: PatternDirection::ParallelToWidth,
