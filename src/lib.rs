@@ -20,10 +20,11 @@ use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 
 #[cfg(feature = "serialize")]
-use serde_derive::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// Indicates the linear direction of a pattern, grain, etc.
-#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serialize", serde(rename_all = "camelCase"))]
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub enum PatternDirection {
     /// No pattern
@@ -54,12 +55,14 @@ impl Default for PatternDirection {
 }
 
 /// A rectangular piece that needs to be cut from a stock piece.
+#[cfg_attr(feature = "serialize", derive(Deserialize))]
+#[cfg_attr(feature = "serialize", serde(rename_all = "camelCase"))]
 #[derive(Clone, Debug)]
 pub struct CutPiece {
     /// ID to be used by the caller to match up result cut pieces
     /// with the original cut piece. This ID has no meaning to the
-    /// optimizer so it can be set to 0 if not needed.
-    pub external_id: usize,
+    /// optimizer so it can be set to `None` if not needed.
+    pub external_id: Option<usize>,
 
     /// Width of this rectangular cut piece.
     pub width: usize,
@@ -77,7 +80,7 @@ pub struct CutPiece {
 #[derive(Clone, Debug)]
 pub(crate) struct CutPieceWithId {
     pub(crate) id: usize,
-    pub(crate) external_id: usize,
+    pub(crate) external_id: Option<usize>,
     pub(crate) width: usize,
     pub(crate) length: usize,
     pub(crate) pattern_direction: PatternDirection,
@@ -99,7 +102,7 @@ impl Eq for CutPieceWithId {}
 #[derive(Clone, Debug)]
 pub(crate) struct UsedCutPiece {
     pub(crate) id: usize,
-    pub(crate) external_id: usize,
+    pub(crate) external_id: Option<usize>,
     pub(crate) rect: Rect,
     pub(crate) pattern_direction: PatternDirection,
     pub(crate) is_rotated: bool,
@@ -168,7 +171,7 @@ impl Into<ResultCutPiece> for UsedCutPiece {
 #[derive(Clone, Debug)]
 pub struct ResultCutPiece {
     /// ID that matches the one on the cut piece that was passed to the optimizer.
-    pub external_id: usize,
+    pub external_id: Option<usize>,
 
     /// X location of the left side of this cut piece within the stock piece.
     pub x: usize,
@@ -192,6 +195,8 @@ pub struct ResultCutPiece {
 
 /// A rectangular stock piece that is available to cut one or more
 /// cut pieces from.
+#[cfg_attr(feature = "serialize", derive(Deserialize))]
+#[cfg_attr(feature = "serialize", serde(rename_all = "camelCase"))]
 #[derive(Hash, Copy, Clone, Debug, Eq, PartialEq)]
 pub struct StockPiece {
     /// Width of rectangular stock piece.
