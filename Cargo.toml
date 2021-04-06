@@ -1,6 +1,6 @@
 [package]
 name = "cut-optimizer-2d"
-version = "0.1.3"
+version = "0.1.4"
 authors = ["Jason Rodney Hansen <jasonrodneyhansen@gmail.com>"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
