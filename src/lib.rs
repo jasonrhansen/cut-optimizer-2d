@@ -677,12 +677,24 @@ pub struct Solution {
 
 /// Optimizer for optimizing rectangular cut pieces from rectangular
 /// stock pieces.
-#[derive(Default)]
 pub struct Optimizer {
     stock_pieces: FnvHashSet<StockPiece>,
     cut_pieces: Vec<CutPieceWithId>,
     cut_width: usize,
     random_seed: u64,
+    allow_mixed_stock_sizes: bool,
+}
+
+impl Default for Optimizer {
+    fn default() -> Self {
+        Self {
+            stock_pieces: Default::default(),
+            cut_pieces: Default::default(),
+            cut_width: Default::default(),
+            random_seed: Default::default(),
+            allow_mixed_stock_sizes: true,
+        }
+    }
 }
 
 impl Optimizer {
@@ -747,6 +759,14 @@ impl Optimizer {
         self.random_seed = seed;
         self
     }
+    
+    /// Set whether the optimizer should allow mixed sized stock pieces in the results. 
+    /// If set to false, and multiple stock sizes are given, only one stock size will be used in
+    /// the results.
+    pub fn allow_mixed_stock_sizes(&mut self, allow: bool) -> &mut Self {
+        self.allow_mixed_stock_sizes = allow;
+        self
+    }
 
     /// Optimize in a way where each cut piece can be cut out using only guillotine cuts,
     /// where each cut extends from one side to the other.
@@ -783,22 +803,35 @@ impl Optimizer {
         B: Bin + Clone + Send + Into<ResultStockPiece>,
         F: Fn(f64),
     {
+        // If there are no cut pieces, there's nothing to optimize.
+        if self.cut_pieces.is_empty() {
+            return Ok((1.0, vec![]))
+        }
+
         let size_set: FnvHashSet<(usize, usize)> = self
             .stock_pieces
             .iter()
             .map(|sp| (sp.width, sp.length))
             .collect();
 
-        let num_runs = size_set.len() + 1;
+        let num_runs = size_set.len() + if self.allow_mixed_stock_sizes { 1 } else { 0 };
         let callback = |progress| {
             progress_callback(progress / num_runs as f64);
         };
 
-        // Optimize with all stock sizes
-        let mut best_result = self.optimize_with_stock_pieces::<B, _>(
-            &self.stock_pieces.iter().cloned().collect::<Vec<_>>(),
-            &callback,
-        );
+        let mut best_result = if self.allow_mixed_stock_sizes {
+            // Optimize with all stock sizes
+            self.optimize_with_stock_pieces::<B, _>(
+                &self.stock_pieces.iter().cloned().collect::<Vec<_>>(),
+                &callback,
+            )
+        } else {
+            // We're not allowing mixed sizes so just give an error result
+            // here. Each stock size will be optmized separately below.
+            // Note: it's safe to assume `self.cut_pieces` isn't empty because
+            // that's checked at the beginning of this function.
+            Err(Error::NoFitForCutPiece(self.cut_pieces[0].clone().into()))
+        };
 
         // Optimize each stock size separately and see if any have better result than
         // when optimizing with all stock sizes.
@@ -1243,6 +1276,39 @@ mod test {
             Err(Error::NoFitForCutPiece(_)) => {}
             _ => {
                 panic!("should have returned Error::NoFitForCutPiece");
+            }
+        }
+    }
+
+    #[test]
+    fn test_no_allow_mixed_stock_sizes() {
+        let result = Optimizer::new()
+            .add_stock_pieces(STOCK_PIECES.iter().cloned().collect::<Vec<_>>())
+            .add_cut_piece(CutPiece {
+                external_id: Some(1),
+                width: 48,
+                length: 96,
+                pattern_direction: PatternDirection::None,
+                can_rotate: false,
+            })
+            .add_cut_piece(CutPiece {
+                external_id: Some(2),
+                width: 48,
+                length: 120,
+                pattern_direction: PatternDirection::None,
+                can_rotate: false,
+            })
+            .set_cut_width(1)
+            .set_random_seed(1)
+            .allow_mixed_stock_sizes(false)
+            .optimize_guillotine(|_| {});
+
+        assert!(result.is_ok());
+        if let Ok(solution) = result {
+            for stock_piece in solution.stock_pieces {
+                // Since we aren't allowing mixed sizes,
+                // all stock pieces will need to be 120 long.
+                assert_eq!(stock_piece.length, 120)
             }
         }
     }
