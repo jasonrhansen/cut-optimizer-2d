@@ -759,8 +759,8 @@ impl Optimizer {
         self.random_seed = seed;
         self
     }
-    
-    /// Set whether the optimizer should allow mixed sized stock pieces in the results. 
+
+    /// Set whether the optimizer should allow mixed sized stock pieces in the results.
     /// If set to false, and multiple stock sizes are given, only one stock size will be used in
     /// the results.
     pub fn allow_mixed_stock_sizes(&mut self, allow: bool) -> &mut Self {
@@ -776,11 +776,7 @@ impl Optimizer {
     where
         F: Fn(f64),
     {
-        let (fitness, stock_pieces) = self.optimize::<GuillotineBin, F>(progress_callback)?;
-        Ok(Solution {
-            fitness,
-            stock_pieces,
-        })
+        self.optimize::<GuillotineBin, F>(progress_callback)
     }
 
     /// Optimize without the requirement of guillotine cuts. Cuts can start and stop in the middle
@@ -791,21 +787,20 @@ impl Optimizer {
     where
         F: Fn(f64),
     {
-        let (fitness, stock_pieces) = self.optimize::<MaxRectsBin, F>(progress_callback)?;
-        Ok(Solution {
-            fitness,
-            stock_pieces,
-        })
+        self.optimize::<MaxRectsBin, F>(progress_callback)
     }
 
-    fn optimize<B, F>(&self, progress_callback: F) -> Result<(f64, Vec<ResultStockPiece>)>
+    fn optimize<B, F>(&self, progress_callback: F) -> Result<Solution>
     where
         B: Bin + Clone + Send + Into<ResultStockPiece>,
         F: Fn(f64),
     {
         // If there are no cut pieces, there's nothing to optimize.
         if self.cut_pieces.is_empty() {
-            return Ok((1.0, vec![]))
+            return Ok(Solution {
+                fitness: 1.0,
+                stock_pieces: Vec::new(),
+            });
         }
 
         let size_set: FnvHashSet<(usize, usize)> = self
@@ -844,24 +839,24 @@ impl Optimizer {
                 .collect();
 
             let completed_runs = i + 1;
-            if let Ok((fitness, used_stock_pieces)) =
+            if let Ok(solution) =
                 self.optimize_with_stock_pieces::<B, _>(&stock_pieces, &|progress| {
                     progress_callback((completed_runs as f64 + progress) / num_runs as f64);
                 })
             {
                 match best_result {
-                    Ok((best_fitness, _)) => {
-                        if fitness > best_fitness {
-                            best_result = Ok((fitness, used_stock_pieces));
+                    Ok(ref best_solution) => {
+                        if solution.fitness > best_solution.fitness {
+                            best_result = Ok(solution);
                         }
                     }
-                    Err(_) => best_result = Ok((fitness, used_stock_pieces)),
+                    Err(_) => best_result = Ok(solution),
                 }
             }
         }
 
-        if let Ok((_, ref mut used_stock_pieces)) = &mut best_result {
-            used_stock_pieces.sort_by_key(|p| cmp::Reverse((p.width, p.length)));
+        if let Ok(ref mut solution) = &mut best_result {
+            solution.stock_pieces.sort_by_key(|p| cmp::Reverse((p.width, p.length)));
         };
 
         best_result
@@ -871,7 +866,7 @@ impl Optimizer {
         &self,
         stock_pieces: &[StockPiece],
         progress_callback: &F,
-    ) -> Result<(f64, Vec<ResultStockPiece>)>
+    ) -> Result<Solution>
     where
         B: Bin + Clone + Send + Into<ResultStockPiece>,
         F: Fn(f64),
@@ -900,7 +895,10 @@ impl Optimizer {
         let used_stock_pieces: Vec<ResultStockPiece> =
             best_unit.bins.drain(..).map(Into::into).collect();
 
-        Ok((fitness, used_stock_pieces))
+        Ok(Solution {
+            fitness,
+            stock_pieces: used_stock_pieces,
+        })
     }
 }
 
