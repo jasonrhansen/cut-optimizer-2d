@@ -38,6 +38,7 @@ pub(crate) struct MaxRectsBin {
     pattern_direction: PatternDirection,
     cut_pieces: Vec<UsedCutPiece>,
     free_rects: Vec<Rect>,
+    price: usize,
 }
 
 impl Bin for MaxRectsBin {
@@ -48,6 +49,7 @@ impl Bin for MaxRectsBin {
         length: usize,
         blade_width: usize,
         pattern_direction: PatternDirection,
+        price: usize,
     ) -> Self {
         // We start with a single big free rectangle that spans the whole bin.
         let free_rect = Rect {
@@ -66,6 +68,7 @@ impl Bin for MaxRectsBin {
             blade_width,
             pattern_direction,
             cut_pieces: Default::default(),
+            price,
         }
     }
 
@@ -94,6 +97,10 @@ impl Bin for MaxRectsBin {
 
         (used_area / (self.width as f64 * self.length as f64))
             .powf(2.0 + self.free_rects.len() as f64 * 0.01)
+    }
+
+    fn price(&self) -> usize {
+        self.price
     }
 
     fn remove_cut_pieces<I>(&mut self, cut_pieces: I) -> usize

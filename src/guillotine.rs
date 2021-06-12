@@ -64,6 +64,7 @@ pub(crate) struct GuillotineBin {
     pattern_direction: PatternDirection,
     cut_pieces: Vec<UsedCutPiece>,
     free_rects: Vec<Rect>,
+    price: usize,
 }
 
 impl Bin for GuillotineBin {
@@ -74,6 +75,7 @@ impl Bin for GuillotineBin {
         length: usize,
         blade_width: usize,
         pattern_direction: PatternDirection,
+        price: usize,
     ) -> Self {
         // We start with a single big free rectangle that spans the whole bin.
         let free_rect = Rect {
@@ -92,6 +94,7 @@ impl Bin for GuillotineBin {
             blade_width,
             pattern_direction,
             cut_pieces: Default::default(),
+            price,
         }
     }
 
@@ -108,6 +111,10 @@ impl Bin for GuillotineBin {
                 .fold(0, |acc, fr| acc + fr.width as u64 * fr.length as u64) as f64;
 
         (used_area / (used_area + free_area) as f64).powf(2.0 + self.free_rects.len() as f64 * 0.01)
+    }
+
+    fn price(&self) -> usize {
+        self.price
     }
 
     fn remove_cut_pieces<I>(&mut self, cut_pieces: I) -> usize

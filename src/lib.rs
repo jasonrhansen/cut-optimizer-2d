@@ -207,6 +207,10 @@ pub struct StockPiece {
 
     /// Pattern direction of stock piece.
     pub pattern_direction: PatternDirection,
+
+    /// Price to use to optimize for price when not all stock pieces are the same price per unit
+    /// area. If optimizing for less waste instead, price can be set to 0 for all stock pieces.
+    pub price: usize,
 }
 
 impl StockPiece {
@@ -328,10 +332,13 @@ trait Bin {
         length: usize,
         blade_width: usize,
         pattern_direction: PatternDirection,
+        price: usize,
     ) -> Self;
 
     /// Computes the fitness of this `Bin` on a scale of 0.0 to 1.0, with 1.0 being the most fit.
     fn fitness(&self) -> f64;
+
+    fn price(&self) -> usize;
 
     /// Removes `UsedCutPiece`s from this `Bin` and returns how many were removed.
     fn remove_cut_pieces<I>(&mut self, cut_pieces: I) -> usize
@@ -546,6 +553,7 @@ where
                 stock_piece.length,
                 self.blade_width,
                 stock_piece.pattern_direction,
+                stock_piece.price,
             );
             if !bin.insert_cut_piece_random_heuristic(cut_piece, rng) {
                 return false;
@@ -673,6 +681,9 @@ pub struct Solution {
 
     /// The stock pieces that were used for this solution, each containing the demand piece layout.
     pub stock_pieces: Vec<ResultStockPiece>,
+
+    #[cfg_attr(feature = "serialize", serde(skip))]
+    price: usize,
 }
 
 /// Optimizer for optimizing rectangular cut pieces from rectangular
@@ -800,6 +811,7 @@ impl Optimizer {
             return Ok(Solution {
                 fitness: 1.0,
                 stock_pieces: Vec::new(),
+                price: 0,
             });
         }
 
@@ -846,7 +858,12 @@ impl Optimizer {
             {
                 match best_result {
                     Ok(ref best_solution) => {
-                        if solution.fitness > best_solution.fitness {
+                        // Use the lower-priced solution, but if the prices are the same, use the
+                        // solution with the higher fitness score.
+                        if solution.price < best_solution.price
+                            || (solution.price == best_solution.price
+                                && solution.fitness > best_solution.fitness)
+                        {
                             best_result = Ok(solution);
                         }
                     }
@@ -856,7 +873,9 @@ impl Optimizer {
         }
 
         if let Ok(ref mut solution) = &mut best_result {
-            solution.stock_pieces.sort_by_key(|p| cmp::Reverse((p.width, p.length)));
+            solution
+                .stock_pieces
+                .sort_by_key(|p| cmp::Reverse((p.width, p.length)));
         };
 
         best_result
@@ -892,12 +911,15 @@ impl Optimizer {
         let best_unit = &mut result_units[0];
         let fitness = best_unit.fitness();
 
+        let price = best_unit.bins.iter().map(|bin| bin.price()).sum();
+
         let used_stock_pieces: Vec<ResultStockPiece> =
             best_unit.bins.drain(..).map(Into::into).collect();
 
         Ok(Solution {
             fitness,
             stock_pieces: used_stock_pieces,
+            price,
         })
     }
 }
@@ -911,11 +933,13 @@ mod test {
             width: 48,
             length: 96,
             pattern_direction: PatternDirection::None,
+            price: 0,
         },
         StockPiece {
             width: 48,
             length: 120,
             pattern_direction: PatternDirection::None,
+            price: 0,
         },
     ];
 
@@ -969,6 +993,7 @@ mod test {
                 width: 10,
                 length: 11,
                 pattern_direction: PatternDirection::None,
+                price: 0,
             })
             .add_cut_piece(CutPiece {
                 external_id: Some(1),
@@ -991,6 +1016,7 @@ mod test {
                 width: 10,
                 length: 11,
                 pattern_direction: PatternDirection::ParallelToWidth,
+                price: 0,
             })
             .add_cut_piece(CutPiece {
                 external_id: Some(1),
@@ -1013,6 +1039,7 @@ mod test {
                 width: 10,
                 length: 10,
                 pattern_direction: PatternDirection::None,
+                price: 0,
             })
             .add_cut_piece(CutPiece {
                 external_id: Some(1),
@@ -1040,6 +1067,7 @@ mod test {
                 width: 10,
                 length: 11,
                 pattern_direction: PatternDirection::None,
+                price: 0,
             })
             .add_cut_piece(CutPiece {
                 external_id: Some(1),
@@ -1067,6 +1095,7 @@ mod test {
                 width: 10,
                 length: 11,
                 pattern_direction: PatternDirection::ParallelToWidth,
+                price: 0,
             })
             .add_cut_piece(CutPiece {
                 external_id: Some(1),
@@ -1094,6 +1123,7 @@ mod test {
                 width: 100,
                 length: 100,
                 pattern_direction: PatternDirection::None,
+                price: 0,
             })
             .add_cut_piece(CutPiece {
                 external_id: Some(1),
@@ -1133,6 +1163,7 @@ mod test {
                 width: 10,
                 length: 11,
                 pattern_direction: PatternDirection::None,
+                price: 0,
             })
             .add_cut_piece(CutPiece {
                 external_id: Some(1),
@@ -1155,6 +1186,7 @@ mod test {
                 width: 10,
                 length: 11,
                 pattern_direction: PatternDirection::ParallelToWidth,
+                price: 0,
             })
             .add_cut_piece(CutPiece {
                 external_id: Some(1),
@@ -1177,6 +1209,7 @@ mod test {
                 width: 10,
                 length: 10,
                 pattern_direction: PatternDirection::None,
+                price: 0,
             })
             .add_cut_piece(CutPiece {
                 external_id: Some(1),
@@ -1204,6 +1237,7 @@ mod test {
                 width: 10,
                 length: 11,
                 pattern_direction: PatternDirection::None,
+                price: 0,
             })
             .add_cut_piece(CutPiece {
                 external_id: Some(1),
@@ -1231,6 +1265,7 @@ mod test {
                 width: 10,
                 length: 11,
                 pattern_direction: PatternDirection::ParallelToWidth,
+                price: 0,
             })
             .add_cut_piece(CutPiece {
                 external_id: Some(1),
@@ -1258,6 +1293,7 @@ mod test {
                 width: 100,
                 length: 100,
                 pattern_direction: PatternDirection::None,
+                price: 0,
             })
             .add_cut_piece(CutPiece {
                 external_id: Some(1),
@@ -1308,6 +1344,93 @@ mod test {
                 // all stock pieces will need to be 120 long.
                 assert_eq!(stock_piece.length, 120)
             }
+        }
+    }
+
+    #[test]
+    fn test_different_stock_piece_prices() {
+        let result = Optimizer::new()
+            .add_stock_piece(StockPiece{
+                width: 48,
+                length: 96,
+                pattern_direction: PatternDirection::None,
+                price: 1,
+            })
+            .add_stock_piece(StockPiece{
+                width: 48,
+                length: 120,
+                pattern_direction: PatternDirection::None,
+                // Maker the 48x120 stock piece more expensive than (2) 48x96 pieces.
+                price: 3,
+            })
+            .add_cut_piece(CutPiece {
+                external_id: Some(1),
+                width: 48,
+                length: 50,
+                pattern_direction: PatternDirection::None,
+                can_rotate: false,
+            })
+            .add_cut_piece(CutPiece {
+                external_id: Some(2),
+                width: 48,
+                length: 50,
+                pattern_direction: PatternDirection::None,
+                can_rotate: false,
+            })
+            .set_cut_width(1)
+            .set_random_seed(1)
+            .allow_mixed_stock_sizes(false)
+            .optimize_guillotine(|_| {});
+
+        assert!(result.is_ok());
+        if let Ok(solution) = result {
+            // A single 48x120 stock piece could be used, but since we've set (2) 48x96 pieces to
+            // be a lower price than (1) 48x120, it should use (2) 48x96 pieces instead.
+            assert_eq!(solution.stock_pieces.len(), 2);
+            for stock_piece in solution.stock_pieces {
+                assert_eq!(stock_piece.length, 96)
+            }
+        }
+    }
+
+    #[test]
+    fn test_same_stock_piece_prices() {
+        let result = Optimizer::new()
+            .add_stock_piece(StockPiece{
+                width: 48,
+                length: 96,
+                pattern_direction: PatternDirection::None,
+                price: 0,
+            })
+            .add_stock_piece(StockPiece{
+                width: 48,
+                length: 120,
+                pattern_direction: PatternDirection::None,
+                price: 0,
+            })
+            .add_cut_piece(CutPiece {
+                external_id: Some(1),
+                width: 48,
+                length: 50,
+                pattern_direction: PatternDirection::None,
+                can_rotate: false,
+            })
+            .add_cut_piece(CutPiece {
+                external_id: Some(2),
+                width: 48,
+                length: 50,
+                pattern_direction: PatternDirection::None,
+                can_rotate: false,
+            })
+            .set_cut_width(1)
+            .set_random_seed(1)
+            .allow_mixed_stock_sizes(false)
+            .optimize_guillotine(|_| {});
+
+        assert!(result.is_ok());
+        if let Ok(solution) = result {
+            assert_eq!(solution.stock_pieces.len(), 1);
+            assert_eq!(solution.stock_pieces[0].length, 120)
         }
     }
 }
