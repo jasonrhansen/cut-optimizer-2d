@@ -627,15 +627,15 @@ impl MaxRectsBin {
     }
 }
 
-impl Into<ResultStockPiece> for MaxRectsBin {
-    fn into(mut self) -> ResultStockPiece {
-        self.make_free_rects_disjoint();
-        ResultStockPiece {
-            width: self.width,
-            length: self.length,
-            pattern_direction: self.pattern_direction,
-            cut_pieces: self.cut_pieces.drain(..).map(Into::into).collect(),
-            waste_pieces: self.free_rects,
+impl From<MaxRectsBin> for ResultStockPiece {
+    fn from(mut bin: MaxRectsBin) -> Self {
+        bin.make_free_rects_disjoint();
+        Self {
+            width: bin.width,
+            length: bin.length,
+            pattern_direction: bin.pattern_direction,
+            cut_pieces: bin.cut_pieces.into_iter().map(Into::into).collect(),
+            waste_pieces: bin.free_rects,
         }
     }
 }

@@ -116,51 +116,51 @@ impl PartialEq for UsedCutPiece {
 }
 impl Eq for UsedCutPiece {}
 
-impl Into<CutPiece> for CutPieceWithId {
-    fn into(self) -> CutPiece {
-        CutPiece {
-            external_id: self.external_id,
-            width: self.width,
-            length: self.length,
-            can_rotate: self.can_rotate,
-            pattern_direction: self.pattern_direction,
+impl From<CutPieceWithId> for CutPiece {
+    fn from(cut_piece: CutPieceWithId) -> Self {
+        Self {
+            external_id: cut_piece.external_id,
+            width: cut_piece.width,
+            length: cut_piece.length,
+            can_rotate: cut_piece.can_rotate,
+            pattern_direction: cut_piece.pattern_direction,
         }
     }
 }
 
-impl Into<CutPieceWithId> for UsedCutPiece {
-    fn into(self) -> CutPieceWithId {
-        let (width, length, pattern_direction) = if self.is_rotated {
+impl From<UsedCutPiece> for CutPieceWithId {
+    fn from(used_cut_piece: UsedCutPiece) -> Self {
+        let (width, length, pattern_direction) = if used_cut_piece.is_rotated {
             (
-                self.rect.length,
-                self.rect.width,
-                self.pattern_direction.rotated(),
+                used_cut_piece.rect.length,
+                used_cut_piece.rect.width,
+                used_cut_piece.pattern_direction.rotated(),
             )
         } else {
-            (self.rect.width, self.rect.length, self.pattern_direction)
+            (used_cut_piece.rect.width, used_cut_piece.rect.length, used_cut_piece.pattern_direction)
         };
 
-        CutPieceWithId {
-            id: self.id,
-            external_id: self.external_id,
+        Self {
+            id: used_cut_piece.id,
+            external_id: used_cut_piece.external_id,
             width,
             length,
-            can_rotate: self.can_rotate,
+            can_rotate: used_cut_piece.can_rotate,
             pattern_direction,
         }
     }
 }
 
-impl Into<ResultCutPiece> for UsedCutPiece {
-    fn into(self) -> ResultCutPiece {
-        ResultCutPiece {
-            external_id: self.external_id,
-            x: self.rect.x,
-            y: self.rect.y,
-            width: self.rect.width,
-            length: self.rect.length,
-            pattern_direction: self.pattern_direction,
-            is_rotated: self.is_rotated,
+impl From<UsedCutPiece> for ResultCutPiece {
+    fn from(used_cut_piece: UsedCutPiece) -> Self {
+        Self {
+            external_id: used_cut_piece.external_id,
+            x: used_cut_piece.rect.x,
+            y: used_cut_piece.rect.y,
+            width: used_cut_piece.rect.width,
+            length: used_cut_piece.rect.length,
+            pattern_direction: used_cut_piece.pattern_direction,
+            is_rotated: used_cut_piece.is_rotated,
         }
     }
 }
@@ -417,7 +417,7 @@ where
         let mut unit = OptimizerUnit {
             bins: Vec::new(),
             possible_stock_pieces,
-            available_stock_pieces: possible_stock_pieces.iter().cloned().collect(),
+            available_stock_pieces: possible_stock_pieces.to_vec(),
             blade_width,
         };
 
@@ -443,7 +443,7 @@ where
         let mut unit = OptimizerUnit {
             bins: Vec::new(),
             possible_stock_pieces,
-            available_stock_pieces: possible_stock_pieces.iter().cloned().collect(),
+            available_stock_pieces: possible_stock_pieces.to_vec(),
             blade_width,
         };
 
@@ -609,7 +609,7 @@ where
                 .cloned()
                 .collect(),
             possible_stock_pieces: self.possible_stock_pieces,
-            available_stock_pieces: self.possible_stock_pieces.iter().cloned().collect(),
+            available_stock_pieces: self.possible_stock_pieces.to_vec(),
             blade_width: self.blade_width,
         };
 
@@ -920,7 +920,7 @@ impl Optimizer {
         let mut best_result = if self.allow_mixed_stock_sizes {
             // Optimize with all stock sizes
             self.optimize_with_stock_pieces::<B, _>(
-                &self.stock_pieces.iter().cloned().collect::<Vec<_>>(),
+                &self.stock_pieces.clone(),
                 &callback,
             )
         } else {

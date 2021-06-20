@@ -471,14 +471,14 @@ impl GuillotineBin {
     }
 }
 
-impl Into<ResultStockPiece> for GuillotineBin {
-    fn into(self) -> ResultStockPiece {
-        ResultStockPiece {
-            width: self.width,
-            length: self.length,
-            pattern_direction: self.pattern_direction,
-            cut_pieces: self.cut_pieces.into_iter().map(Into::into).collect(),
-            waste_pieces: self.free_rects,
+impl From<GuillotineBin> for ResultStockPiece {
+    fn from(bin: GuillotineBin) -> Self {
+        Self {
+            width: bin.width,
+            length: bin.length,
+            pattern_direction: bin.pattern_direction,
+            cut_pieces: bin.cut_pieces.into_iter().map(Into::into).collect(),
+            waste_pieces: bin.free_rects,
         }
     }
 }
