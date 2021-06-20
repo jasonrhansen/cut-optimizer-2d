@@ -211,9 +211,13 @@ pub struct StockPiece {
     /// Price to use to optimize for price when not all stock pieces are the same price per unit
     /// area. If optimizing for less waste instead, price can be set to 0 for all stock pieces.
     pub price: usize,
+
+    /// Quantity of this stock piece available for optimization. `None` means infinite quantity.
+    pub quantity: Option<usize>,
 }
 
 impl StockPiece {
+    /// Checks whether of not the cut piece fits within the bounds of this stock piece.
     fn fits_cut_piece(&self, cut_piece: &CutPieceWithId) -> bool {
         let rect = Rect {
             x: 0,
@@ -223,6 +227,13 @@ impl StockPiece {
         };
 
         rect.fit_cut_piece(self.pattern_direction, cut_piece) != Fit::None
+    }
+
+    /// Decrement the quantity of this stock piece. If quantity is `None` it will remain `None`.
+    fn dec_quantity(&mut self) {
+        if let Some(ref mut quantity) = self.quantity {
+            *quantity -= 1;
+        }
     }
 }
 
@@ -369,6 +380,9 @@ trait Bin {
     ) -> bool
     where
         R: Rng + ?Sized;
+
+    /// Returns whether the `StockPiece` is equivalent to this `Bin`.
+    fn matches_stock_piece(&self, stock_piece: &StockPiece) -> bool;
 }
 
 #[derive(Debug)]
@@ -377,7 +391,13 @@ where
     B: Bin,
 {
     bins: Vec<B>,
+
+    // All of the possible stock pieces. It remains constant.
     possible_stock_pieces: &'a [StockPiece],
+
+    // Stock pieces that are currently available to use for new bins.
+    available_stock_pieces: Vec<StockPiece>,
+
     blade_width: usize,
 }
 
@@ -397,6 +417,7 @@ where
         let mut unit = OptimizerUnit {
             bins: Vec::new(),
             possible_stock_pieces,
+            available_stock_pieces: possible_stock_pieces.iter().cloned().collect(),
             blade_width,
         };
 
@@ -422,6 +443,7 @@ where
         let mut unit = OptimizerUnit {
             bins: Vec::new(),
             possible_stock_pieces,
+            available_stock_pieces: possible_stock_pieces.iter().cloned().collect(),
             blade_width,
         };
 
@@ -541,27 +563,31 @@ where
     where
         R: Rng + ?Sized,
     {
-        let possible_stock_pieces: Vec<&StockPiece> = self
-            .possible_stock_pieces
-            .iter()
-            .filter(|stock_piece| stock_piece.fits_cut_piece(cut_piece))
-            .collect();
+        let stock_pieces = self
+            .available_stock_pieces
+            .iter_mut()
+            .filter(|stock_piece| {
+                stock_piece.quantity != Some(0) && stock_piece.fits_cut_piece(cut_piece)
+            });
 
-        if let Some(stock_piece) = possible_stock_pieces.choose(rng) {
-            let mut bin = B::new(
-                stock_piece.width,
-                stock_piece.length,
-                self.blade_width,
-                stock_piece.pattern_direction,
-                stock_piece.price,
-            );
-            if !bin.insert_cut_piece_random_heuristic(cut_piece, rng) {
-                return false;
+        match stock_pieces.choose(rng) {
+            Some(stock_piece) => {
+                stock_piece.dec_quantity();
+
+                let mut bin = B::new(
+                    stock_piece.width,
+                    stock_piece.length,
+                    self.blade_width,
+                    stock_piece.pattern_direction,
+                    stock_piece.price,
+                );
+                if !bin.insert_cut_piece_random_heuristic(cut_piece, rng) {
+                    return false;
+                }
+                self.bins.push(bin);
+                true
             }
-            self.bins.push(bin);
-            true
-        } else {
-            false
+            None => false,
         }
     }
 
@@ -583,8 +609,24 @@ where
                 .cloned()
                 .collect(),
             possible_stock_pieces: self.possible_stock_pieces,
+            available_stock_pieces: self.possible_stock_pieces.iter().cloned().collect(),
             blade_width: self.blade_width,
         };
+
+        // Update available stock piece quantities based on the injected bins.
+        other.bins[cross_src_start..cross_src_end]
+            .iter()
+            .for_each(|bin| {
+                if let Some(ref mut stock_piece) = new_unit
+                    .available_stock_pieces
+                    .iter_mut()
+                    .find(|sp| bin.matches_stock_piece(sp))
+                {
+                    stock_piece.dec_quantity();
+                } else {
+                    panic!("Attempt to inject invalid bin in crossover operation. This shouldn't happen, and means there is a bug in the code.");
+                }
+            });
 
         let mut removed_cut_pieces: Vec<UsedCutPiece> = Vec::new();
         for i in (0..cross_dest)
@@ -592,11 +634,28 @@ where
             .rev()
         {
             let bin = &mut new_unit.bins[i];
-            let injected_cut_pieces = (&other.bins[cross_src_start..cross_src_end])
-                .iter()
-                .flat_map(Bin::cut_pieces)
-                .cloned();
-            if bin.remove_cut_pieces(injected_cut_pieces) > 0 {
+            if let Some(ref mut stock_piece) = new_unit
+                .available_stock_pieces
+                .iter_mut()
+                .find(|sp| bin.matches_stock_piece(sp))
+            {
+                // We found an available stock piece for this bin, so attempt to use it.
+                let injected_cut_pieces = (&other.bins[cross_src_start..cross_src_end])
+                    .iter()
+                    .flat_map(Bin::cut_pieces)
+                    .cloned();
+                if bin.remove_cut_pieces(injected_cut_pieces) > 0 {
+                    for cut_piece in bin.cut_pieces().cloned() {
+                        removed_cut_pieces.push(cut_piece);
+                    }
+                    new_unit.bins.remove(i);
+                } else {
+                    // We're keeping this bin so decrement the quantity of the available stock
+                    // piece.
+                    stock_piece.dec_quantity();
+                }
+            } else {
+                // There's no available stock piece left for this bin so remove it.
                 for cut_piece in bin.cut_pieces().cloned() {
                     removed_cut_pieces.push(cut_piece);
                 }
@@ -605,7 +664,9 @@ where
         }
 
         for cut_piece in removed_cut_pieces {
-            new_unit.first_fit_random_heuristics(&cut_piece.into(), rng);
+            if !new_unit.first_fit_random_heuristics(&cut_piece.into(), rng) {
+                panic!("Non-fitting cut piece in crossover operation. This shouldn't happen, and means there is a bug in the code.");
+            }
         }
 
         // Only keep bins that have cut_pieces
@@ -689,7 +750,7 @@ pub struct Solution {
 /// Optimizer for optimizing rectangular cut pieces from rectangular
 /// stock pieces.
 pub struct Optimizer {
-    stock_pieces: FnvHashSet<StockPiece>,
+    stock_pieces: Vec<StockPiece>,
     cut_pieces: Vec<CutPieceWithId>,
     cut_width: usize,
     random_seed: u64,
@@ -714,20 +775,50 @@ impl Optimizer {
         Default::default()
     }
 
-    /// Add a stock piece that the optimizer can use to optimize cut pieces. Each
-    /// unique stock piece only needs to be added once.
+    /// Add a stock piece that the optimizer can use to optimize cut pieces.
+    /// If the same stock piece is added multiple times, the quantities will be
+    /// summed up. If any have a `None` quantity, the quantity on other equivalent
+    /// pieces will be ignored.
     pub fn add_stock_piece(&mut self, stock_piece: StockPiece) -> &mut Self {
-        self.stock_pieces.insert(stock_piece);
+        let mut existing_stock_piece = self.stock_pieces.iter_mut().find(|sp| {
+            sp.width == stock_piece.width
+                && sp.length == stock_piece.length
+                && sp.pattern_direction == stock_piece.pattern_direction
+                && sp.price == stock_piece.price
+        });
+
+        if let Some(ref mut existing_stock_piece) = existing_stock_piece {
+            match (&mut existing_stock_piece.quantity, stock_piece.quantity) {
+                (Some(ref mut existing_quantity), Some(quantity)) => {
+                    // If there is already a stock piece that is the same except the quantity, add
+                    // to the quantity.
+                    *existing_quantity += quantity;
+                }
+                _ => {
+                    // `None` quantity means infinite, so if either is `None` we want it to be
+                    // `None`.
+                    existing_stock_piece.quantity = None;
+                }
+            }
+        } else {
+            // A stock piece like this hasn't yet been added so let's do it.
+            self.stock_pieces.push(stock_piece);
+        }
+
         self
     }
 
-    /// Add stock pieces that the optimizer can use to optimize cut pieces. Each
-    /// unique stock piece only needs to be added once.
+    /// Add a stock pieces that the optimizer can use to optimize cut pieces.
+    /// If the same stock piece is added multiple times, the quantities will be
+    /// summed up. If any have a `None` quantity, the quantity on other equivalent
+    /// pieces will be ignored.
     pub fn add_stock_pieces<I>(&mut self, stock_pieces: I) -> &mut Self
     where
         I: IntoIterator<Item = StockPiece>,
     {
-        self.stock_pieces.extend(stock_pieces);
+        stock_pieces.into_iter().for_each(|sp| {
+            self.add_stock_piece(sp);
+        });
         self
     }
 
@@ -925,7 +1016,7 @@ impl Optimizer {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
 
     static STOCK_PIECES: &[StockPiece] = &[
@@ -934,12 +1025,14 @@ mod test {
             length: 96,
             pattern_direction: PatternDirection::None,
             price: 0,
+            quantity: None,
         },
         StockPiece {
             width: 48,
             length: 120,
             pattern_direction: PatternDirection::None,
             price: 0,
+            quantity: None,
         },
     ];
 
@@ -975,7 +1068,7 @@ mod test {
     ];
 
     #[test]
-    fn test_guillotine() {
+    fn guillotine() {
         let result = Optimizer::new()
             .add_stock_pieces(STOCK_PIECES.iter().cloned().collect::<Vec<_>>())
             .add_cut_pieces(CUT_PIECES.iter().cloned().collect::<Vec<_>>())
@@ -987,13 +1080,14 @@ mod test {
     }
 
     #[test]
-    fn test_guillotine_rotate() {
+    fn guillotine_rotate() {
         let result = Optimizer::new()
             .add_stock_piece(StockPiece {
                 width: 10,
                 length: 11,
                 pattern_direction: PatternDirection::None,
                 price: 0,
+                quantity: None,
             })
             .add_cut_piece(CutPiece {
                 external_id: Some(1),
@@ -1010,13 +1104,14 @@ mod test {
     }
 
     #[test]
-    fn test_guillotine_rotate_pattern() {
+    fn guillotine_rotate_pattern() {
         let result = Optimizer::new()
             .add_stock_piece(StockPiece {
                 width: 10,
                 length: 11,
                 pattern_direction: PatternDirection::ParallelToWidth,
                 price: 0,
+                quantity: None,
             })
             .add_cut_piece(CutPiece {
                 external_id: Some(1),
@@ -1033,13 +1128,14 @@ mod test {
     }
 
     #[test]
-    fn test_non_fitting_cut_piece_guillotine_can_rotate() {
+    fn non_fitting_cut_piece_guillotine_can_rotate() {
         let result = Optimizer::new()
             .add_stock_piece(StockPiece {
                 width: 10,
                 length: 10,
                 pattern_direction: PatternDirection::None,
                 price: 0,
+                quantity: None,
             })
             .add_cut_piece(CutPiece {
                 external_id: Some(1),
@@ -1061,13 +1157,14 @@ mod test {
     }
 
     #[test]
-    fn test_non_fitting_cut_piece_guillotine_no_rotate() {
+    fn non_fitting_cut_piece_guillotine_no_rotate() {
         let result = Optimizer::new()
             .add_stock_piece(StockPiece {
                 width: 10,
                 length: 11,
                 pattern_direction: PatternDirection::None,
                 price: 0,
+                quantity: None,
             })
             .add_cut_piece(CutPiece {
                 external_id: Some(1),
@@ -1089,13 +1186,14 @@ mod test {
     }
 
     #[test]
-    fn test_non_fitting_cut_piece_guillotine_no_rotate_pattern() {
+    fn non_fitting_cut_piece_guillotine_no_rotate_pattern() {
         let result = Optimizer::new()
             .add_stock_piece(StockPiece {
                 width: 10,
                 length: 11,
                 pattern_direction: PatternDirection::ParallelToWidth,
                 price: 0,
+                quantity: None,
             })
             .add_cut_piece(CutPiece {
                 external_id: Some(1),
@@ -1117,13 +1215,14 @@ mod test {
     }
 
     #[test]
-    fn test_non_fitting_cut_piece_guillotine_mismatched_pattern() {
+    fn non_fitting_cut_piece_guillotine_mismatched_pattern() {
         let result = Optimizer::new()
             .add_stock_piece(StockPiece {
                 width: 100,
                 length: 100,
                 pattern_direction: PatternDirection::None,
                 price: 0,
+                quantity: None,
             })
             .add_cut_piece(CutPiece {
                 external_id: Some(1),
@@ -1145,7 +1244,7 @@ mod test {
     }
 
     #[test]
-    fn test_nested() {
+    fn nested() {
         let result = Optimizer::new()
             .add_stock_pieces(STOCK_PIECES.iter().cloned().collect::<Vec<_>>())
             .add_cut_pieces(CUT_PIECES.iter().cloned().collect::<Vec<_>>())
@@ -1157,13 +1256,14 @@ mod test {
     }
 
     #[test]
-    fn test_nested_rotate() {
+    fn nested_rotate() {
         let result = Optimizer::new()
             .add_stock_piece(StockPiece {
                 width: 10,
                 length: 11,
                 pattern_direction: PatternDirection::None,
                 price: 0,
+                quantity: None,
             })
             .add_cut_piece(CutPiece {
                 external_id: Some(1),
@@ -1180,13 +1280,14 @@ mod test {
     }
 
     #[test]
-    fn test_nested_rotate_pattern() {
+    fn nested_rotate_pattern() {
         let result = Optimizer::new()
             .add_stock_piece(StockPiece {
                 width: 10,
                 length: 11,
                 pattern_direction: PatternDirection::ParallelToWidth,
                 price: 0,
+                quantity: None,
             })
             .add_cut_piece(CutPiece {
                 external_id: Some(1),
@@ -1203,13 +1304,14 @@ mod test {
     }
 
     #[test]
-    fn test_non_fitting_cut_piece_nested_can_rotate() {
+    fn non_fitting_cut_piece_nested_can_rotate() {
         let result = Optimizer::new()
             .add_stock_piece(StockPiece {
                 width: 10,
                 length: 10,
                 pattern_direction: PatternDirection::None,
                 price: 0,
+                quantity: None,
             })
             .add_cut_piece(CutPiece {
                 external_id: Some(1),
@@ -1231,13 +1333,14 @@ mod test {
     }
 
     #[test]
-    fn test_non_fitting_cut_piece_nested_no_rotate() {
+    fn non_fitting_cut_piece_nested_no_rotate() {
         let result = Optimizer::new()
             .add_stock_piece(StockPiece {
                 width: 10,
                 length: 11,
                 pattern_direction: PatternDirection::None,
                 price: 0,
+                quantity: None,
             })
             .add_cut_piece(CutPiece {
                 external_id: Some(1),
@@ -1259,13 +1362,14 @@ mod test {
     }
 
     #[test]
-    fn test_non_fitting_cut_piece_nested_no_rotate_pattern() {
+    fn non_fitting_cut_piece_nested_no_rotate_pattern() {
         let result = Optimizer::new()
             .add_stock_piece(StockPiece {
                 width: 10,
                 length: 11,
                 pattern_direction: PatternDirection::ParallelToWidth,
                 price: 0,
+                quantity: None,
             })
             .add_cut_piece(CutPiece {
                 external_id: Some(1),
@@ -1287,13 +1391,14 @@ mod test {
     }
 
     #[test]
-    fn test_non_fitting_cut_piece_nested_mismatched_pattern() {
+    fn non_fitting_cut_piece_nested_mismatched_pattern() {
         let result = Optimizer::new()
             .add_stock_piece(StockPiece {
                 width: 100,
                 length: 100,
                 pattern_direction: PatternDirection::None,
                 price: 0,
+                quantity: None,
             })
             .add_cut_piece(CutPiece {
                 external_id: Some(1),
@@ -1315,7 +1420,7 @@ mod test {
     }
 
     #[test]
-    fn test_no_allow_mixed_stock_sizes() {
+    fn no_allow_mixed_stock_sizes() {
         let result = Optimizer::new()
             .add_stock_pieces(STOCK_PIECES.iter().cloned().collect::<Vec<_>>())
             .add_cut_piece(CutPiece {
@@ -1348,20 +1453,22 @@ mod test {
     }
 
     #[test]
-    fn test_different_stock_piece_prices() {
+    fn different_stock_piece_prices() {
         let result = Optimizer::new()
-            .add_stock_piece(StockPiece{
+            .add_stock_piece(StockPiece {
                 width: 48,
                 length: 96,
                 pattern_direction: PatternDirection::None,
                 price: 1,
+                quantity: None,
             })
-            .add_stock_piece(StockPiece{
+            .add_stock_piece(StockPiece {
                 width: 48,
                 length: 120,
                 pattern_direction: PatternDirection::None,
                 // Maker the 48x120 stock piece more expensive than (2) 48x96 pieces.
                 price: 3,
+                quantity: None,
             })
             .add_cut_piece(CutPiece {
                 external_id: Some(1),
@@ -1394,19 +1501,21 @@ mod test {
     }
 
     #[test]
-    fn test_same_stock_piece_prices() {
+    fn same_stock_piece_prices() {
         let result = Optimizer::new()
-            .add_stock_piece(StockPiece{
+            .add_stock_piece(StockPiece {
                 width: 48,
                 length: 96,
                 pattern_direction: PatternDirection::None,
                 price: 0,
+                quantity: None,
             })
-            .add_stock_piece(StockPiece{
+            .add_stock_piece(StockPiece {
                 width: 48,
                 length: 120,
                 pattern_direction: PatternDirection::None,
                 price: 0,
+                quantity: None,
             })
             .add_cut_piece(CutPiece {
                 external_id: Some(1),
@@ -1432,5 +1541,136 @@ mod test {
             assert_eq!(solution.stock_pieces.len(), 1);
             assert_eq!(solution.stock_pieces[0].length, 120)
         }
+    }
+
+    #[test]
+    fn stock_quantity_too_low() {
+        let result = Optimizer::new()
+            .add_stock_piece(StockPiece {
+                width: 48,
+                length: 96,
+                pattern_direction: PatternDirection::None,
+                price: 0,
+                quantity: Some(1),
+            })
+            .add_cut_piece(CutPiece {
+                external_id: None,
+                width: 48,
+                length: 96,
+                pattern_direction: PatternDirection::None,
+                can_rotate: false,
+            })
+            .add_cut_piece(CutPiece {
+                external_id: None,
+                width: 48,
+                length: 96,
+                pattern_direction: PatternDirection::None,
+                can_rotate: false,
+            })
+            .set_cut_width(1)
+            .set_random_seed(1)
+            .optimize_guillotine(|_| {});
+
+        assert!(
+            result.is_err(),
+            "should fail because stock quantity is too low"
+        );
+    }
+
+    #[test]
+    fn stock_quantity_ok() {
+        let result = Optimizer::new()
+            .add_stock_piece(StockPiece {
+                width: 48,
+                length: 96,
+                pattern_direction: PatternDirection::None,
+                price: 0,
+                quantity: Some(2),
+            })
+            .add_cut_piece(CutPiece {
+                external_id: None,
+                width: 48,
+                length: 96,
+                pattern_direction: PatternDirection::None,
+                can_rotate: false,
+            })
+            .add_cut_piece(CutPiece {
+                external_id: None,
+                width: 48,
+                length: 96,
+                pattern_direction: PatternDirection::None,
+                can_rotate: false,
+            })
+            .set_cut_width(1)
+            .set_random_seed(1)
+            .optimize_guillotine(|_| {});
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn add_equivalent_stock_pieces_sums_quantities() {
+        let mut optimizer = Optimizer::new();
+        optimizer
+            .add_stock_piece(StockPiece {
+                width: 48,
+                length: 96,
+                pattern_direction: PatternDirection::None,
+                price: 0,
+                quantity: Some(3),
+            })
+            .add_stock_piece(StockPiece {
+                width: 48,
+                length: 96,
+                pattern_direction: PatternDirection::None,
+                price: 0,
+                quantity: Some(6),
+            });
+
+        assert_eq!(optimizer.stock_pieces.len(), 1);
+        assert_eq!(optimizer.stock_pieces[0].quantity, Some(9));
+    }
+
+    #[test]
+    fn add_equivalent_stock_pieces_with_none() {
+        let mut optimizer = Optimizer::new();
+        optimizer
+            .add_stock_piece(StockPiece {
+                width: 48,
+                length: 96,
+                pattern_direction: PatternDirection::None,
+                price: 0,
+                quantity: None,
+            })
+            .add_stock_piece(StockPiece {
+                width: 48,
+                length: 96,
+                pattern_direction: PatternDirection::None,
+                price: 0,
+                quantity: Some(6),
+            });
+
+        assert_eq!(optimizer.stock_pieces.len(), 1);
+        assert_eq!(optimizer.stock_pieces[0].quantity, None);
+    }
+
+    #[test]
+    fn stock_pieces_dec_quantity() {
+        let mut stock_piece = StockPiece {
+            width: 48,
+            length: 96,
+            pattern_direction: PatternDirection::None,
+            price: 0,
+            quantity: Some(10),
+        };
+
+        stock_piece.dec_quantity();
+
+        assert_eq!(stock_piece.quantity, Some(9));
+
+        stock_piece.quantity = None;
+        stock_piece.dec_quantity();
+
+        assert_eq!(stock_piece.quantity, None);
     }
 }
