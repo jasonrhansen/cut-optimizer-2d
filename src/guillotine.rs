@@ -234,6 +234,13 @@ impl Bin for GuillotineBin {
     {
         self.insert_cut_piece_with_heuristic(cut_piece, &rng.gen())
     }
+
+    fn matches_stock_piece(&self, stock_piece: &StockPiece) -> bool {
+        self.width == stock_piece.width
+            && self.length == stock_piece.length
+            && self.pattern_direction == stock_piece.pattern_direction
+            && self.price == stock_piece.price
+    }
 }
 
 impl GuillotineBin {
@@ -464,14 +471,14 @@ impl GuillotineBin {
     }
 }
 
-impl Into<ResultStockPiece> for GuillotineBin {
-    fn into(self) -> ResultStockPiece {
-        ResultStockPiece {
-            width: self.width,
-            length: self.length,
-            pattern_direction: self.pattern_direction,
-            cut_pieces: self.cut_pieces.into_iter().map(Into::into).collect(),
-            waste_pieces: self.free_rects,
+impl From<GuillotineBin> for ResultStockPiece {
+    fn from(bin: GuillotineBin) -> Self {
+        Self {
+            width: bin.width,
+            length: bin.length,
+            pattern_direction: bin.pattern_direction,
+            cut_pieces: bin.cut_pieces.into_iter().map(Into::into).collect(),
+            waste_pieces: bin.free_rects,
         }
     }
 }
@@ -533,4 +540,152 @@ fn score_worst_short_side_fit(width: usize, length: usize, free_rect: &Rect) -> 
 
 fn score_worst_long_side_fit(width: usize, length: usize, free_rect: &Rect) -> isize {
     -score_best_long_side_fit(width, length, free_rect)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn remove_cut_pieces() {
+        let cut_pieces = &[
+            CutPieceWithId {
+                id: 0,
+                external_id: None,
+                width: 10,
+                length: 10,
+                pattern_direction: PatternDirection::None,
+                can_rotate: false,
+            },
+            CutPieceWithId {
+                id: 1,
+                external_id: None,
+                width: 10,
+                length: 10,
+                pattern_direction: PatternDirection::None,
+                can_rotate: false,
+            },
+            CutPieceWithId {
+                id: 2,
+                external_id: None,
+                width: 10,
+                length: 10,
+                pattern_direction: PatternDirection::None,
+                can_rotate: false,
+            },
+            CutPieceWithId {
+                id: 3,
+                external_id: None,
+                width: 10,
+                length: 10,
+                pattern_direction: PatternDirection::None,
+                can_rotate: false,
+            },
+        ];
+
+        let heuristic = GuillotineBin::possible_heuristics()[0];
+
+        let mut bin = GuillotineBin::new(48, 96, 1, PatternDirection::None, 0);
+        cut_pieces.iter().for_each(|cut_piece| {
+            bin.insert_cut_piece_with_heuristic(cut_piece, &heuristic);
+        });
+
+        assert_eq!(bin.cut_pieces().len(), 4);
+
+        let cut_pieces_to_remove = [
+            UsedCutPiece {
+                id: 1,
+                external_id: None,
+                rect: Default::default(),
+                pattern_direction: PatternDirection::None,
+                is_rotated: false,
+                can_rotate: false,
+            },
+            UsedCutPiece {
+                id: 3,
+                external_id: None,
+                rect: Default::default(),
+                pattern_direction: PatternDirection::None,
+                is_rotated: false,
+                can_rotate: false,
+            },
+        ];
+
+        bin.remove_cut_pieces(cut_pieces_to_remove.iter());
+
+        assert_eq!(bin.cut_pieces().len(), 2);
+        assert_eq!(bin.cut_pieces().next().unwrap().id, 0);
+        assert_eq!(bin.cut_pieces().nth(1).unwrap().id, 2);
+    }
+
+    #[test]
+    fn bin_matches_stock_piece() {
+        let bin = GuillotineBin {
+            width: 48,
+            length: 96,
+            blade_width: 1,
+            pattern_direction: PatternDirection::None,
+            cut_pieces: Default::default(),
+            free_rects: Default::default(),
+            price: 0,
+        };
+
+        let stock_piece = StockPiece {
+            width: 48,
+            length: 96,
+            pattern_direction: PatternDirection::None,
+            price: 0,
+            quantity: Some(20),
+        };
+
+        assert!(bin.matches_stock_piece(&stock_piece));
+    }
+
+    #[test]
+    fn bin_does_not_match_stock_pieces() {
+        let bin = GuillotineBin {
+            width: 48,
+            length: 96,
+            blade_width: 1,
+            pattern_direction: PatternDirection::None,
+            cut_pieces: Default::default(),
+            free_rects: Default::default(),
+            price: 0,
+        };
+
+        let stock_pieces = &[
+            StockPiece {
+                width: 10,
+                length: 96,
+                pattern_direction: PatternDirection::None,
+                price: 0,
+                quantity: Some(20),
+            },
+            StockPiece {
+                width: 48,
+                length: 10,
+                pattern_direction: PatternDirection::None,
+                price: 0,
+                quantity: Some(20),
+            },
+            StockPiece {
+                width: 48,
+                length: 96,
+                pattern_direction: PatternDirection::ParallelToLength,
+                price: 0,
+                quantity: Some(20),
+            },
+            StockPiece {
+                width: 48,
+                length: 96,
+                pattern_direction: PatternDirection::None,
+                price: 10,
+                quantity: Some(20),
+            },
+        ];
+
+        stock_pieces
+            .iter()
+            .for_each(|stock_piece| assert!(!bin.matches_stock_piece(&stock_piece)))
+    }
 }
