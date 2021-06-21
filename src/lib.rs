@@ -137,7 +137,11 @@ impl From<UsedCutPiece> for CutPieceWithId {
                 used_cut_piece.pattern_direction.rotated(),
             )
         } else {
-            (used_cut_piece.rect.width, used_cut_piece.rect.length, used_cut_piece.pattern_direction)
+            (
+                used_cut_piece.rect.width,
+                used_cut_piece.rect.length,
+                used_cut_piece.pattern_direction,
+            )
         };
 
         Self {
@@ -168,7 +172,7 @@ impl From<UsedCutPiece> for ResultCutPiece {
 /// A cut piece that has been placed in a solution by the optimizer.
 #[cfg_attr(feature = "serialize", derive(Deserialize, Serialize))]
 #[cfg_attr(feature = "serialize", serde(rename_all = "camelCase"))]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ResultCutPiece {
     /// ID that matches the one on the cut piece that was passed to the optimizer.
     pub external_id: Option<usize>,
@@ -306,6 +310,17 @@ impl Rect {
             && rect.x + rect.width <= self.x + self.width
             && rect.y >= self.y
             && rect.y + rect.length <= self.y + self.length
+    }
+}
+
+impl From<&ResultCutPiece> for Rect {
+    fn from(cut_piece: &ResultCutPiece) -> Self {
+        Self {
+            x: cut_piece.x,
+            y: cut_piece.y,
+            width: cut_piece.width,
+            length: cut_piece.length,
+        }
     }
 }
 
@@ -717,6 +732,7 @@ where
 }
 
 /// Error while optimizing.
+#[derive(Debug)]
 pub enum Error {
     /// There was no stock piece that could contain this demand piece.
     NoFitForCutPiece(CutPiece),
@@ -919,10 +935,7 @@ impl Optimizer {
 
         let mut best_result = if self.allow_mixed_stock_sizes {
             // Optimize with all stock sizes
-            self.optimize_with_stock_pieces::<B, _>(
-                &self.stock_pieces.clone(),
-                &callback,
-            )
+            self.optimize_with_stock_pieces::<B, _>(&self.stock_pieces.clone(), &callback)
         } else {
             // We're not allowing mixed sizes so just give an error result
             // here. Each stock size will be optmized separately below.
@@ -1067,21 +1080,72 @@ mod tests {
         },
     ];
 
+    fn sanity_check_solution(solution: &Solution, num_cut_pieces: usize) {
+        let stock_pieces = &solution.stock_pieces;
+
+        assert!(solution.fitness <= 1.0);
+
+        // The number of result cut pieces should match the number of input cut pieces.
+        assert_eq!(
+            stock_pieces
+                .iter()
+                .map(|sp| sp.cut_pieces.len())
+                .sum::<usize>(),
+            num_cut_pieces
+        );
+
+        for stock_piece in stock_pieces {
+            for cut_piece in &stock_piece.cut_pieces {
+                assert_eq!(stock_piece.pattern_direction, cut_piece.pattern_direction);
+                let stock_piece_area = stock_piece.width * stock_piece.length;
+                let cut_piece_area = stock_piece
+                    .cut_pieces
+                    .iter()
+                    .map(|cp| cp.width * cp.length)
+                    .sum::<usize>();
+                let waste_piece_area = stock_piece
+                    .waste_pieces
+                    .iter()
+                    .map(|wp| wp.width * wp.length)
+                    .sum::<usize>();
+
+                // Make sure the stock piece is big enough for the cut pieces and waste pieces.
+                assert!(stock_piece_area >= cut_piece_area + waste_piece_area);
+            }
+
+            let rects: Vec<Rect> = stock_piece
+                .cut_pieces
+                .iter()
+                .map(|cp| cp.into())
+                .chain(stock_piece.waste_pieces.iter().cloned())
+                .collect();
+
+            // Assert that all cut pieces and waste pieces are disjoint.
+            for i in (0..rects.len()).rev() {
+                for j in (i + 1..rects.len()).rev() {
+                    assert!(!rects[j].contains(&rects[i]));
+                    assert!(!rects[i].contains(&rects[j]));
+                }
+            }
+        }
+    }
+
     #[test]
     fn guillotine() {
-        let result = Optimizer::new()
+        let solution = Optimizer::new()
             .add_stock_pieces(STOCK_PIECES.iter().cloned().collect::<Vec<_>>())
             .add_cut_pieces(CUT_PIECES.iter().cloned().collect::<Vec<_>>())
             .set_cut_width(1)
             .set_random_seed(1)
-            .optimize_guillotine(|_| {});
+            .optimize_guillotine(|_| {})
+            .unwrap();
 
-        assert!(result.is_ok());
+        sanity_check_solution(&solution, CUT_PIECES.len());
     }
 
     #[test]
     fn guillotine_rotate() {
-        let result = Optimizer::new()
+        let solution = Optimizer::new()
             .add_stock_piece(StockPiece {
                 width: 10,
                 length: 11,
@@ -1098,14 +1162,32 @@ mod tests {
             })
             .set_cut_width(1)
             .set_random_seed(1)
-            .optimize_guillotine(|_| {});
+            .optimize_guillotine(|_| {})
+            .unwrap();
 
-        assert!(result.is_ok());
+        sanity_check_solution(&solution, 1);
+
+        let stock_pieces = solution.stock_pieces;
+        assert_eq!(stock_pieces.len(), 1);
+        let cut_pieces = &stock_pieces[0].cut_pieces;
+        assert_eq!(cut_pieces.len(), 1);
+        assert_eq!(
+            cut_pieces[0],
+            ResultCutPiece {
+                external_id: Some(1),
+                x: 0,
+                y: 0,
+                width: 10,
+                length: 11,
+                pattern_direction: PatternDirection::None,
+                is_rotated: true,
+            }
+        );
     }
 
     #[test]
     fn guillotine_rotate_pattern() {
-        let result = Optimizer::new()
+        let solution = Optimizer::new()
             .add_stock_piece(StockPiece {
                 width: 10,
                 length: 11,
@@ -1122,13 +1204,31 @@ mod tests {
             })
             .set_cut_width(1)
             .set_random_seed(1)
-            .optimize_guillotine(|_| {});
+            .optimize_guillotine(|_| {})
+            .unwrap();
 
-        assert!(result.is_ok());
+        sanity_check_solution(&solution, 1);
+
+        let stock_pieces = solution.stock_pieces;
+        assert_eq!(stock_pieces.len(), 1);
+        let cut_pieces = &stock_pieces[0].cut_pieces;
+        assert_eq!(cut_pieces.len(), 1);
+        assert_eq!(
+            cut_pieces[0],
+            ResultCutPiece {
+                external_id: Some(1),
+                x: 0,
+                y: 0,
+                width: 10,
+                length: 11,
+                pattern_direction: PatternDirection::ParallelToWidth,
+                is_rotated: true,
+            }
+        );
     }
 
     #[test]
-    fn non_fitting_cut_piece_guillotine_can_rotate() {
+    fn guillotine_non_fitting_cut_piece_can_rotate() {
         let result = Optimizer::new()
             .add_stock_piece(StockPiece {
                 width: 10,
@@ -1148,16 +1248,14 @@ mod tests {
             .set_random_seed(1)
             .optimize_guillotine(|_| {});
 
-        match result {
-            Err(Error::NoFitForCutPiece(_)) => {}
-            _ => {
-                panic!("should have returned Error::NoFitForCutPiece");
-            }
-        }
+        assert!(
+            matches!(result, Err(Error::NoFitForCutPiece(_))),
+            "should have returned Error::NoFitForCutPiece"
+        )
     }
 
     #[test]
-    fn non_fitting_cut_piece_guillotine_no_rotate() {
+    fn guillotine_non_fitting_cut_piece_no_rotate() {
         let result = Optimizer::new()
             .add_stock_piece(StockPiece {
                 width: 10,
@@ -1177,16 +1275,14 @@ mod tests {
             .set_random_seed(1)
             .optimize_guillotine(|_| {});
 
-        match result {
-            Err(Error::NoFitForCutPiece(_)) => {}
-            _ => {
-                panic!("should have returned Error::NoFitForCutPiece");
-            }
-        }
+        assert!(
+            matches!(result, Err(Error::NoFitForCutPiece(_))),
+            "should have returned Error::NoFitForCutPiece"
+        )
     }
 
     #[test]
-    fn non_fitting_cut_piece_guillotine_no_rotate_pattern() {
+    fn guillotine_non_fitting_cut_piece_no_rotate_pattern() {
         let result = Optimizer::new()
             .add_stock_piece(StockPiece {
                 width: 10,
@@ -1206,16 +1302,14 @@ mod tests {
             .set_random_seed(1)
             .optimize_guillotine(|_| {});
 
-        match result {
-            Err(Error::NoFitForCutPiece(_)) => {}
-            _ => {
-                panic!("should have returned Error::NoFitForCutPiece");
-            }
-        }
+        assert!(
+            matches!(result, Err(Error::NoFitForCutPiece(_))),
+            "should have returned Error::NoFitForCutPiece"
+        )
     }
 
     #[test]
-    fn non_fitting_cut_piece_guillotine_mismatched_pattern() {
+    fn guillotine_non_fitting_cut_piece_mismatched_pattern() {
         let result = Optimizer::new()
             .add_stock_piece(StockPiece {
                 width: 100,
@@ -1235,193 +1329,15 @@ mod tests {
             .set_random_seed(1)
             .optimize_guillotine(|_| {});
 
-        match result {
-            Err(Error::NoFitForCutPiece(_)) => {}
-            _ => {
-                panic!("should have returned Error::NoFitForCutPiece");
-            }
-        }
+        assert!(
+            matches!(result, Err(Error::NoFitForCutPiece(_))),
+            "should have returned Error::NoFitForCutPiece"
+        )
     }
 
     #[test]
-    fn nested() {
-        let result = Optimizer::new()
-            .add_stock_pieces(STOCK_PIECES.iter().cloned().collect::<Vec<_>>())
-            .add_cut_pieces(CUT_PIECES.iter().cloned().collect::<Vec<_>>())
-            .set_cut_width(1)
-            .set_random_seed(1)
-            .optimize_nested(|_| {});
-
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn nested_rotate() {
-        let result = Optimizer::new()
-            .add_stock_piece(StockPiece {
-                width: 10,
-                length: 11,
-                pattern_direction: PatternDirection::None,
-                price: 0,
-                quantity: None,
-            })
-            .add_cut_piece(CutPiece {
-                external_id: Some(1),
-                width: 11,
-                length: 10,
-                pattern_direction: PatternDirection::None,
-                can_rotate: true,
-            })
-            .set_cut_width(1)
-            .set_random_seed(1)
-            .optimize_nested(|_| {});
-
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn nested_rotate_pattern() {
-        let result = Optimizer::new()
-            .add_stock_piece(StockPiece {
-                width: 10,
-                length: 11,
-                pattern_direction: PatternDirection::ParallelToWidth,
-                price: 0,
-                quantity: None,
-            })
-            .add_cut_piece(CutPiece {
-                external_id: Some(1),
-                width: 11,
-                length: 10,
-                pattern_direction: PatternDirection::ParallelToLength,
-                can_rotate: true,
-            })
-            .set_cut_width(1)
-            .set_random_seed(1)
-            .optimize_nested(|_| {});
-
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn non_fitting_cut_piece_nested_can_rotate() {
-        let result = Optimizer::new()
-            .add_stock_piece(StockPiece {
-                width: 10,
-                length: 10,
-                pattern_direction: PatternDirection::None,
-                price: 0,
-                quantity: None,
-            })
-            .add_cut_piece(CutPiece {
-                external_id: Some(1),
-                width: 11,
-                length: 10,
-                pattern_direction: PatternDirection::None,
-                can_rotate: true,
-            })
-            .set_cut_width(1)
-            .set_random_seed(1)
-            .optimize_nested(|_| {});
-
-        match result {
-            Err(Error::NoFitForCutPiece(_)) => {}
-            _ => {
-                panic!("should have returned Error::NoFitForCutPiece");
-            }
-        }
-    }
-
-    #[test]
-    fn non_fitting_cut_piece_nested_no_rotate() {
-        let result = Optimizer::new()
-            .add_stock_piece(StockPiece {
-                width: 10,
-                length: 11,
-                pattern_direction: PatternDirection::None,
-                price: 0,
-                quantity: None,
-            })
-            .add_cut_piece(CutPiece {
-                external_id: Some(1),
-                width: 11,
-                length: 10,
-                pattern_direction: PatternDirection::None,
-                can_rotate: false,
-            })
-            .set_cut_width(1)
-            .set_random_seed(1)
-            .optimize_nested(|_| {});
-
-        match result {
-            Err(Error::NoFitForCutPiece(_)) => {}
-            _ => {
-                panic!("should have returned Error::NoFitForCutPiece");
-            }
-        }
-    }
-
-    #[test]
-    fn non_fitting_cut_piece_nested_no_rotate_pattern() {
-        let result = Optimizer::new()
-            .add_stock_piece(StockPiece {
-                width: 10,
-                length: 11,
-                pattern_direction: PatternDirection::ParallelToWidth,
-                price: 0,
-                quantity: None,
-            })
-            .add_cut_piece(CutPiece {
-                external_id: Some(1),
-                width: 11,
-                length: 10,
-                pattern_direction: PatternDirection::ParallelToLength,
-                can_rotate: false,
-            })
-            .set_cut_width(1)
-            .set_random_seed(1)
-            .optimize_nested(|_| {});
-
-        match result {
-            Err(Error::NoFitForCutPiece(_)) => {}
-            _ => {
-                panic!("should have returned Error::NoFitForCutPiece");
-            }
-        }
-    }
-
-    #[test]
-    fn non_fitting_cut_piece_nested_mismatched_pattern() {
-        let result = Optimizer::new()
-            .add_stock_piece(StockPiece {
-                width: 100,
-                length: 100,
-                pattern_direction: PatternDirection::None,
-                price: 0,
-                quantity: None,
-            })
-            .add_cut_piece(CutPiece {
-                external_id: Some(1),
-                width: 11,
-                length: 10,
-                pattern_direction: PatternDirection::ParallelToWidth,
-                can_rotate: true,
-            })
-            .set_cut_width(1)
-            .set_random_seed(1)
-            .optimize_nested(|_| {});
-
-        match result {
-            Err(Error::NoFitForCutPiece(_)) => {}
-            _ => {
-                panic!("should have returned Error::NoFitForCutPiece");
-            }
-        }
-    }
-
-    #[test]
-    fn no_allow_mixed_stock_sizes() {
-        let result = Optimizer::new()
+    fn guillotine_no_allow_mixed_stock_sizes() {
+        let solution = Optimizer::new()
             .add_stock_pieces(STOCK_PIECES.iter().cloned().collect::<Vec<_>>())
             .add_cut_piece(CutPiece {
                 external_id: Some(1),
@@ -1440,21 +1356,22 @@ mod tests {
             .set_cut_width(1)
             .set_random_seed(1)
             .allow_mixed_stock_sizes(false)
-            .optimize_guillotine(|_| {});
+            .optimize_guillotine(|_| {})
+            .unwrap();
 
-        assert!(result.is_ok());
-        if let Ok(solution) = result {
-            for stock_piece in solution.stock_pieces {
-                // Since we aren't allowing mixed sizes,
-                // all stock pieces will need to be 120 long.
-                assert_eq!(stock_piece.length, 120)
-            }
+        sanity_check_solution(&solution, 2);
+
+        assert_eq!(solution.stock_pieces.len(), 2);
+        for stock_piece in solution.stock_pieces {
+            // Since we aren't allowing mixed sizes,
+            // all stock pieces will need to be 120 long.
+            assert_eq!(stock_piece.length, 120)
         }
     }
 
     #[test]
-    fn different_stock_piece_prices() {
-        let result = Optimizer::new()
+    fn guillotine_different_stock_piece_prices() {
+        let solution = Optimizer::new()
             .add_stock_piece(StockPiece {
                 width: 48,
                 length: 96,
@@ -1487,22 +1404,22 @@ mod tests {
             .set_cut_width(1)
             .set_random_seed(1)
             .allow_mixed_stock_sizes(false)
-            .optimize_guillotine(|_| {});
+            .optimize_guillotine(|_| {})
+            .unwrap();
 
-        assert!(result.is_ok());
-        if let Ok(solution) = result {
-            // A single 48x120 stock piece could be used, but since we've set (2) 48x96 pieces to
-            // be a lower price than (1) 48x120, it should use (2) 48x96 pieces instead.
-            assert_eq!(solution.stock_pieces.len(), 2);
-            for stock_piece in solution.stock_pieces {
-                assert_eq!(stock_piece.length, 96)
-            }
+        sanity_check_solution(&solution, 2);
+
+        // A single 48x120 stock piece could be used, but since we've set (2) 48x96 pieces to
+        // be a lower price than (1) 48x120, it should use (2) 48x96 pieces instead.
+        assert_eq!(solution.stock_pieces.len(), 2);
+        for stock_piece in solution.stock_pieces {
+            assert_eq!(stock_piece.length, 96)
         }
     }
 
     #[test]
-    fn same_stock_piece_prices() {
-        let result = Optimizer::new()
+    fn guillotine_same_stock_piece_prices() {
+        let solution = Optimizer::new()
             .add_stock_piece(StockPiece {
                 width: 48,
                 length: 96,
@@ -1534,17 +1451,17 @@ mod tests {
             .set_cut_width(1)
             .set_random_seed(1)
             .allow_mixed_stock_sizes(false)
-            .optimize_guillotine(|_| {});
+            .optimize_guillotine(|_| {})
+            .unwrap();
 
-        assert!(result.is_ok());
-        if let Ok(solution) = result {
-            assert_eq!(solution.stock_pieces.len(), 1);
-            assert_eq!(solution.stock_pieces[0].length, 120)
-        }
+        sanity_check_solution(&solution, 2);
+
+        assert_eq!(solution.stock_pieces.len(), 1);
+        assert_eq!(solution.stock_pieces[0].length, 120)
     }
 
     #[test]
-    fn stock_quantity_too_low() {
+    fn guillotine_stock_quantity_too_low() {
         let result = Optimizer::new()
             .add_stock_piece(StockPiece {
                 width: 48,
@@ -1578,8 +1495,8 @@ mod tests {
     }
 
     #[test]
-    fn stock_quantity_ok() {
-        let result = Optimizer::new()
+    fn guillotine_stock_quantity_ok() {
+        let solution = Optimizer::new()
             .add_stock_piece(StockPiece {
                 width: 48,
                 length: 96,
@@ -1603,9 +1520,821 @@ mod tests {
             })
             .set_cut_width(1)
             .set_random_seed(1)
-            .optimize_guillotine(|_| {});
+            .optimize_guillotine(|_| {})
+            .unwrap();
 
-        assert!(result.is_ok());
+        sanity_check_solution(&solution, 2);
+    }
+
+    #[test]
+    fn guillotine_32_cut_pieces_on_1_stock_piece() {
+        let mut optimizer = Optimizer::new();
+        optimizer.add_stock_piece(StockPiece {
+            width: 48,
+            length: 96,
+            pattern_direction: PatternDirection::None,
+            price: 0,
+            quantity: None,
+        });
+
+        let num_cut_pieces = 32;
+
+        for i in 0..num_cut_pieces {
+            optimizer.add_cut_piece(CutPiece {
+                external_id: Some(i),
+                width: 10,
+                length: 10,
+                pattern_direction: PatternDirection::None,
+                can_rotate: false,
+            });
+        }
+
+        let solution = optimizer
+            .set_cut_width(1)
+            .set_random_seed(1)
+            .optimize_guillotine(|_| {})
+            .unwrap();
+
+        sanity_check_solution(&solution, num_cut_pieces);
+
+        let stock_pieces = solution.stock_pieces;
+        assert_eq!(stock_pieces.len(), 1);
+        let cut_pieces = &stock_pieces[0].cut_pieces;
+        assert_eq!(cut_pieces.len(), 32);
+    }
+
+    #[test]
+    fn guillotine_32_cut_pieces_on_2_stock_piece_zero_cut_width() {
+        let mut optimizer = Optimizer::new();
+        optimizer.add_stock_piece(StockPiece {
+            width: 48,
+            length: 96,
+            pattern_direction: PatternDirection::None,
+            price: 0,
+            quantity: None,
+        });
+
+        let num_cut_pieces = 32;
+
+        for i in 0..num_cut_pieces {
+            optimizer.add_cut_piece(CutPiece {
+                external_id: Some(i),
+                width: 12,
+                length: 12,
+                pattern_direction: PatternDirection::None,
+                can_rotate: false,
+            });
+        }
+
+        let solution = optimizer
+            .set_cut_width(0)
+            .set_random_seed(1)
+            .optimize_guillotine(|_| {})
+            .unwrap();
+
+        sanity_check_solution(&solution, num_cut_pieces);
+
+        let stock_pieces = solution.stock_pieces;
+        assert_eq!(stock_pieces.len(), 1);
+        let cut_pieces = &stock_pieces[0].cut_pieces;
+        assert_eq!(cut_pieces.len(), 32);
+    }
+
+    #[test]
+    fn guillotine_32_cut_pieces_on_2_stock_piece() {
+        let mut optimizer = Optimizer::new();
+        optimizer.add_stock_piece(StockPiece {
+            width: 48,
+            length: 96,
+            pattern_direction: PatternDirection::None,
+            price: 0,
+            quantity: None,
+        });
+
+        let num_cut_pieces = 32;
+
+        for i in 0..num_cut_pieces {
+            optimizer.add_cut_piece(CutPiece {
+                external_id: Some(i),
+                width: 12,
+                length: 12,
+                pattern_direction: PatternDirection::None,
+                can_rotate: false,
+            });
+        }
+
+        let solution = optimizer
+            .set_cut_width(1)
+            .set_random_seed(1)
+            .optimize_guillotine(|_| {})
+            .unwrap();
+
+        sanity_check_solution(&solution, num_cut_pieces);
+
+        let stock_pieces = solution.stock_pieces;
+        assert_eq!(stock_pieces.len(), 2);
+    }
+
+    #[test]
+    fn guillotine_64_cut_pieces_on_2_stock_pieces() {
+        let mut optimizer = Optimizer::new();
+        optimizer.add_stock_piece(StockPiece {
+            width: 48,
+            length: 96,
+            pattern_direction: PatternDirection::None,
+            price: 0,
+            quantity: None,
+        });
+
+        let num_cut_pieces = 64;
+
+        for i in 0..num_cut_pieces {
+            optimizer.add_cut_piece(CutPiece {
+                external_id: Some(i),
+                width: 10,
+                length: 10,
+                pattern_direction: PatternDirection::None,
+                can_rotate: false,
+            });
+        }
+
+        let solution = optimizer
+            .set_cut_width(1)
+            .set_random_seed(1)
+            .optimize_guillotine(|_| {})
+            .unwrap();
+
+        sanity_check_solution(&solution, num_cut_pieces);
+
+        let stock_pieces = solution.stock_pieces;
+        assert_eq!(stock_pieces.len(), 2);
+        assert_eq!(stock_pieces[0].cut_pieces.len(), 32);
+        assert_eq!(stock_pieces[1].cut_pieces.len(), 32);
+    }
+
+    #[test]
+    fn guillotine_random_cut_pieces() {
+        let mut optimizer = Optimizer::new();
+        optimizer.add_stock_piece(StockPiece {
+            width: 48,
+            length: 96,
+            pattern_direction: PatternDirection::ParallelToWidth,
+            price: 0,
+            quantity: None,
+        });
+        optimizer.add_stock_piece(StockPiece {
+            width: 48,
+            length: 96,
+            pattern_direction: PatternDirection::ParallelToLength,
+            price: 0,
+            quantity: None,
+        });
+        optimizer.add_stock_piece(StockPiece {
+            width: 48,
+            length: 120,
+            pattern_direction: PatternDirection::ParallelToWidth,
+            price: 0,
+            quantity: None,
+        });
+        optimizer.add_stock_piece(StockPiece {
+            width: 48,
+            length: 120,
+            pattern_direction: PatternDirection::ParallelToLength,
+            price: 0,
+            quantity: None,
+        });
+
+        let mut rng: StdRng = SeedableRng::seed_from_u64(1);
+
+        let num_cut_pieces = 30;
+
+        for i in 0..num_cut_pieces {
+            optimizer.add_cut_piece(CutPiece {
+                external_id: Some(i),
+                width: rng.gen_range(1..=48),
+                length: rng.gen_range(1..=120),
+                pattern_direction: if rng.gen_bool(0.5) {
+                    PatternDirection::ParallelToWidth
+                } else {
+                    PatternDirection::ParallelToLength
+                },
+                can_rotate: true,
+            });
+        }
+
+        let solution = optimizer
+            .set_cut_width(1)
+            .set_random_seed(1)
+            .optimize_guillotine(|_| {})
+            .unwrap();
+
+        sanity_check_solution(&solution, num_cut_pieces);
+    }
+
+    #[test]
+    fn nested() {
+        let solution = Optimizer::new()
+            .add_stock_pieces(STOCK_PIECES.iter().cloned().collect::<Vec<_>>())
+            .add_cut_pieces(CUT_PIECES.iter().cloned().collect::<Vec<_>>())
+            .set_cut_width(1)
+            .set_random_seed(1)
+            .optimize_nested(|_| {})
+            .unwrap();
+
+        sanity_check_solution(&solution, CUT_PIECES.len());
+
+        let stock_pieces = solution.stock_pieces;
+        assert_eq!(stock_pieces.len(), 1);
+        let cut_pieces = &stock_pieces[0].cut_pieces;
+        assert_eq!(cut_pieces.len(), CUT_PIECES.len());
+    }
+
+    #[test]
+    fn nested_rotate() {
+        let solution = Optimizer::new()
+            .add_stock_piece(StockPiece {
+                width: 10,
+                length: 11,
+                pattern_direction: PatternDirection::None,
+                price: 0,
+                quantity: None,
+            })
+            .add_cut_piece(CutPiece {
+                external_id: Some(1),
+                width: 11,
+                length: 10,
+                pattern_direction: PatternDirection::None,
+                can_rotate: true,
+            })
+            .set_cut_width(1)
+            .set_random_seed(1)
+            .optimize_nested(|_| {})
+            .unwrap();
+
+        sanity_check_solution(&solution, 1);
+
+        let stock_pieces = solution.stock_pieces;
+        assert_eq!(stock_pieces.len(), 1);
+        let cut_pieces = &stock_pieces[0].cut_pieces;
+        assert_eq!(cut_pieces.len(), 1);
+        assert_eq!(
+            cut_pieces[0],
+            ResultCutPiece {
+                external_id: Some(1),
+                x: 0,
+                y: 0,
+                width: 10,
+                length: 11,
+                pattern_direction: PatternDirection::None,
+                is_rotated: true,
+            }
+        );
+    }
+
+    #[test]
+    fn nested_rotate_pattern() {
+        let solution = Optimizer::new()
+            .add_stock_piece(StockPiece {
+                width: 10,
+                length: 11,
+                pattern_direction: PatternDirection::ParallelToWidth,
+                price: 0,
+                quantity: None,
+            })
+            .add_cut_piece(CutPiece {
+                external_id: Some(1),
+                width: 11,
+                length: 10,
+                pattern_direction: PatternDirection::ParallelToLength,
+                can_rotate: true,
+            })
+            .set_cut_width(1)
+            .set_random_seed(1)
+            .optimize_nested(|_| {})
+            .unwrap();
+
+        sanity_check_solution(&solution, 1);
+
+        let stock_pieces = solution.stock_pieces;
+        assert_eq!(stock_pieces.len(), 1);
+        let cut_pieces = &stock_pieces[0].cut_pieces;
+        assert_eq!(cut_pieces.len(), 1);
+        assert_eq!(
+            cut_pieces[0],
+            ResultCutPiece {
+                external_id: Some(1),
+                x: 0,
+                y: 0,
+                width: 10,
+                length: 11,
+                pattern_direction: PatternDirection::ParallelToWidth,
+                is_rotated: true,
+            }
+        );
+    }
+
+    #[test]
+    fn nested_non_fitting_cut_piece_can_rotate() {
+        let result = Optimizer::new()
+            .add_stock_piece(StockPiece {
+                width: 10,
+                length: 10,
+                pattern_direction: PatternDirection::None,
+                price: 0,
+                quantity: None,
+            })
+            .add_cut_piece(CutPiece {
+                external_id: Some(1),
+                width: 11,
+                length: 10,
+                pattern_direction: PatternDirection::None,
+                can_rotate: true,
+            })
+            .set_cut_width(1)
+            .set_random_seed(1)
+            .optimize_nested(|_| {});
+
+        assert!(
+            matches!(result, Err(Error::NoFitForCutPiece(_))),
+            "should have returned Error::NoFitForCutPiece"
+        )
+    }
+
+    #[test]
+    fn nested_non_fitting_cut_piece_no_rotate() {
+        let result = Optimizer::new()
+            .add_stock_piece(StockPiece {
+                width: 10,
+                length: 11,
+                pattern_direction: PatternDirection::None,
+                price: 0,
+                quantity: None,
+            })
+            .add_cut_piece(CutPiece {
+                external_id: Some(1),
+                width: 11,
+                length: 10,
+                pattern_direction: PatternDirection::None,
+                can_rotate: false,
+            })
+            .set_cut_width(1)
+            .set_random_seed(1)
+            .optimize_nested(|_| {});
+
+        assert!(
+            matches!(result, Err(Error::NoFitForCutPiece(_))),
+            "should have returned Error::NoFitForCutPiece"
+        )
+    }
+
+    #[test]
+    fn nested_non_fitting_cut_piece_no_rotate_pattern() {
+        let result = Optimizer::new()
+            .add_stock_piece(StockPiece {
+                width: 10,
+                length: 11,
+                pattern_direction: PatternDirection::ParallelToWidth,
+                price: 0,
+                quantity: None,
+            })
+            .add_cut_piece(CutPiece {
+                external_id: Some(1),
+                width: 11,
+                length: 10,
+                pattern_direction: PatternDirection::ParallelToLength,
+                can_rotate: false,
+            })
+            .set_cut_width(1)
+            .set_random_seed(1)
+            .optimize_nested(|_| {});
+
+        assert!(
+            matches!(result, Err(Error::NoFitForCutPiece(_))),
+            "should have returned Error::NoFitForCutPiece"
+        )
+    }
+
+    #[test]
+    fn nested_non_fitting_cut_piece_mismatched_pattern() {
+        let result = Optimizer::new()
+            .add_stock_piece(StockPiece {
+                width: 100,
+                length: 100,
+                pattern_direction: PatternDirection::None,
+                price: 0,
+                quantity: None,
+            })
+            .add_cut_piece(CutPiece {
+                external_id: Some(1),
+                width: 11,
+                length: 10,
+                pattern_direction: PatternDirection::ParallelToWidth,
+                can_rotate: true,
+            })
+            .set_cut_width(1)
+            .set_random_seed(1)
+            .optimize_nested(|_| {});
+
+        assert!(
+            matches!(result, Err(Error::NoFitForCutPiece(_))),
+            "should have returned Error::NoFitForCutPiece"
+        )
+    }
+
+    #[test]
+    fn nested_no_allow_mixed_stock_sizes() {
+        let solution = Optimizer::new()
+            .add_stock_pieces(STOCK_PIECES.iter().cloned().collect::<Vec<_>>())
+            .add_cut_piece(CutPiece {
+                external_id: Some(1),
+                width: 48,
+                length: 96,
+                pattern_direction: PatternDirection::None,
+                can_rotate: false,
+            })
+            .add_cut_piece(CutPiece {
+                external_id: Some(2),
+                width: 48,
+                length: 120,
+                pattern_direction: PatternDirection::None,
+                can_rotate: false,
+            })
+            .set_cut_width(1)
+            .set_random_seed(1)
+            .allow_mixed_stock_sizes(false)
+            .optimize_nested(|_| {})
+            .unwrap();
+
+        sanity_check_solution(&solution, 2);
+
+        assert_eq!(solution.stock_pieces.len(), 2);
+        for stock_piece in solution.stock_pieces {
+            // Since we aren't allowing mixed sizes,
+            // all stock pieces will need to be 120 long.
+            assert_eq!(stock_piece.length, 120)
+        }
+    }
+
+    #[test]
+    fn nested_different_stock_piece_prices() {
+        let solution = Optimizer::new()
+            .add_stock_piece(StockPiece {
+                width: 48,
+                length: 96,
+                pattern_direction: PatternDirection::None,
+                price: 1,
+                quantity: None,
+            })
+            .add_stock_piece(StockPiece {
+                width: 48,
+                length: 120,
+                pattern_direction: PatternDirection::None,
+                // Maker the 48x120 stock piece more expensive than (2) 48x96 pieces.
+                price: 3,
+                quantity: None,
+            })
+            .add_cut_piece(CutPiece {
+                external_id: Some(1),
+                width: 48,
+                length: 50,
+                pattern_direction: PatternDirection::None,
+                can_rotate: false,
+            })
+            .add_cut_piece(CutPiece {
+                external_id: Some(2),
+                width: 48,
+                length: 50,
+                pattern_direction: PatternDirection::None,
+                can_rotate: false,
+            })
+            .set_cut_width(1)
+            .set_random_seed(1)
+            .allow_mixed_stock_sizes(false)
+            .optimize_nested(|_| {})
+            .unwrap();
+
+        sanity_check_solution(&solution, 2);
+
+        // A single 48x120 stock piece could be used, but since we've set (2) 48x96 pieces to
+        // be a lower price than (1) 48x120, it should use (2) 48x96 pieces instead.
+        assert_eq!(solution.stock_pieces.len(), 2);
+        for stock_piece in solution.stock_pieces {
+            assert_eq!(stock_piece.length, 96)
+        }
+    }
+
+    #[test]
+    fn nested_same_stock_piece_prices() {
+        let solution = Optimizer::new()
+            .add_stock_piece(StockPiece {
+                width: 48,
+                length: 96,
+                pattern_direction: PatternDirection::None,
+                price: 0,
+                quantity: None,
+            })
+            .add_stock_piece(StockPiece {
+                width: 48,
+                length: 120,
+                pattern_direction: PatternDirection::None,
+                price: 0,
+                quantity: None,
+            })
+            .add_cut_piece(CutPiece {
+                external_id: Some(1),
+                width: 48,
+                length: 50,
+                pattern_direction: PatternDirection::None,
+                can_rotate: false,
+            })
+            .add_cut_piece(CutPiece {
+                external_id: Some(2),
+                width: 48,
+                length: 50,
+                pattern_direction: PatternDirection::None,
+                can_rotate: false,
+            })
+            .set_cut_width(1)
+            .set_random_seed(1)
+            .allow_mixed_stock_sizes(false)
+            .optimize_nested(|_| {})
+            .unwrap();
+
+        sanity_check_solution(&solution, 2);
+
+        assert_eq!(solution.stock_pieces.len(), 1);
+        assert_eq!(solution.stock_pieces[0].length, 120)
+    }
+
+    #[test]
+    fn nested_stock_quantity_too_low() {
+        let result = Optimizer::new()
+            .add_stock_piece(StockPiece {
+                width: 48,
+                length: 96,
+                pattern_direction: PatternDirection::None,
+                price: 0,
+                quantity: Some(1),
+            })
+            .add_cut_piece(CutPiece {
+                external_id: None,
+                width: 48,
+                length: 96,
+                pattern_direction: PatternDirection::None,
+                can_rotate: false,
+            })
+            .add_cut_piece(CutPiece {
+                external_id: None,
+                width: 48,
+                length: 96,
+                pattern_direction: PatternDirection::None,
+                can_rotate: false,
+            })
+            .set_cut_width(1)
+            .set_random_seed(1)
+            .optimize_nested(|_| {});
+
+        assert!(
+            result.is_err(),
+            "should fail because stock quantity is too low"
+        );
+    }
+
+    #[test]
+    fn nested_stock_quantity_ok() {
+        let solution = Optimizer::new()
+            .add_stock_piece(StockPiece {
+                width: 48,
+                length: 96,
+                pattern_direction: PatternDirection::None,
+                price: 0,
+                quantity: Some(2),
+            })
+            .add_cut_piece(CutPiece {
+                external_id: None,
+                width: 48,
+                length: 96,
+                pattern_direction: PatternDirection::None,
+                can_rotate: false,
+            })
+            .add_cut_piece(CutPiece {
+                external_id: None,
+                width: 48,
+                length: 96,
+                pattern_direction: PatternDirection::None,
+                can_rotate: false,
+            })
+            .set_cut_width(1)
+            .set_random_seed(1)
+            .optimize_nested(|_| {})
+            .unwrap();
+
+        sanity_check_solution(&solution, 2);
+    }
+
+    #[test]
+    fn nested_32_cut_pieces_on_1_stock_piece() {
+        let mut optimizer = Optimizer::new();
+        optimizer.add_stock_piece(StockPiece {
+            width: 48,
+            length: 96,
+            pattern_direction: PatternDirection::None,
+            price: 0,
+            quantity: None,
+        });
+
+        let num_cut_pieces = 32;
+
+        for i in 0..num_cut_pieces {
+            optimizer.add_cut_piece(CutPiece {
+                external_id: Some(i),
+                width: 10,
+                length: 10,
+                pattern_direction: PatternDirection::None,
+                can_rotate: false,
+            });
+        }
+
+        let solution = optimizer
+            .set_cut_width(1)
+            .set_random_seed(1)
+            .optimize_nested(|_| {})
+            .unwrap();
+
+        sanity_check_solution(&solution, num_cut_pieces);
+
+        let stock_pieces = solution.stock_pieces;
+        assert_eq!(stock_pieces.len(), 1);
+        let cut_pieces = &stock_pieces[0].cut_pieces;
+        assert_eq!(cut_pieces.len(), 32);
+    }
+
+    #[test]
+    fn nested_32_cut_pieces_on_2_stock_piece_zero_cut_width() {
+        let mut optimizer = Optimizer::new();
+        optimizer.add_stock_piece(StockPiece {
+            width: 48,
+            length: 96,
+            pattern_direction: PatternDirection::None,
+            price: 0,
+            quantity: None,
+        });
+
+        let num_cut_pieces = 32;
+
+        for i in 0..num_cut_pieces {
+            optimizer.add_cut_piece(CutPiece {
+                external_id: Some(i),
+                width: 12,
+                length: 12,
+                pattern_direction: PatternDirection::None,
+                can_rotate: false,
+            });
+        }
+
+        let solution = optimizer
+            .set_cut_width(0)
+            .set_random_seed(1)
+            .optimize_nested(|_| {})
+            .unwrap();
+
+        sanity_check_solution(&solution, num_cut_pieces);
+
+        let stock_pieces = solution.stock_pieces;
+        assert_eq!(stock_pieces.len(), 1);
+        let cut_pieces = &stock_pieces[0].cut_pieces;
+        assert_eq!(cut_pieces.len(), 32);
+    }
+
+    #[test]
+    fn nested_32_cut_pieces_on_2_stock_piece() {
+        let mut optimizer = Optimizer::new();
+        optimizer.add_stock_piece(StockPiece {
+            width: 48,
+            length: 96,
+            pattern_direction: PatternDirection::None,
+            price: 0,
+            quantity: None,
+        });
+
+        let num_cut_pieces = 32;
+
+        for i in 0..num_cut_pieces {
+            optimizer.add_cut_piece(CutPiece {
+                external_id: Some(i),
+                width: 12,
+                length: 12,
+                pattern_direction: PatternDirection::None,
+                can_rotate: false,
+            });
+        }
+
+        let solution = optimizer
+            .set_cut_width(1)
+            .set_random_seed(1)
+            .optimize_nested(|_| {})
+            .unwrap();
+
+        sanity_check_solution(&solution, num_cut_pieces);
+
+        let stock_pieces = solution.stock_pieces;
+        assert_eq!(stock_pieces.len(), 2);
+    }
+
+    #[test]
+    fn nested_64_cut_pieces_on_2_stock_pieces() {
+        let mut optimizer = Optimizer::new();
+        optimizer.add_stock_piece(StockPiece {
+            width: 48,
+            length: 96,
+            pattern_direction: PatternDirection::None,
+            price: 0,
+            quantity: None,
+        });
+
+        let num_cut_pieces = 64;
+
+        for i in 0..num_cut_pieces {
+            optimizer.add_cut_piece(CutPiece {
+                external_id: Some(i),
+                width: 10,
+                length: 10,
+                pattern_direction: PatternDirection::None,
+                can_rotate: false,
+            });
+        }
+
+        let solution = optimizer
+            .set_cut_width(1)
+            .set_random_seed(1)
+            .optimize_nested(|_| {})
+            .unwrap();
+
+        sanity_check_solution(&solution, num_cut_pieces);
+
+        let stock_pieces = solution.stock_pieces;
+        assert_eq!(stock_pieces.len(), 2);
+        assert_eq!(stock_pieces[0].cut_pieces.len(), 32);
+        assert_eq!(stock_pieces[1].cut_pieces.len(), 32);
+    }
+
+    #[test]
+    fn nested_random_cut_pieces() {
+        let mut optimizer = Optimizer::new();
+        optimizer.add_stock_piece(StockPiece {
+            width: 48,
+            length: 96,
+            pattern_direction: PatternDirection::ParallelToWidth,
+            price: 0,
+            quantity: None,
+        });
+        optimizer.add_stock_piece(StockPiece {
+            width: 48,
+            length: 96,
+            pattern_direction: PatternDirection::ParallelToLength,
+            price: 0,
+            quantity: None,
+        });
+        optimizer.add_stock_piece(StockPiece {
+            width: 48,
+            length: 120,
+            pattern_direction: PatternDirection::ParallelToWidth,
+            price: 0,
+            quantity: None,
+        });
+        optimizer.add_stock_piece(StockPiece {
+            width: 48,
+            length: 120,
+            pattern_direction: PatternDirection::ParallelToLength,
+            price: 0,
+            quantity: None,
+        });
+
+        let mut rng: StdRng = SeedableRng::seed_from_u64(1);
+
+        let num_cut_pieces = 30;
+
+        for i in 0..num_cut_pieces {
+            optimizer.add_cut_piece(CutPiece {
+                external_id: Some(i),
+                width: rng.gen_range(1..=48),
+                length: rng.gen_range(1..=120),
+                pattern_direction: if rng.gen_bool(0.5) {
+                    PatternDirection::ParallelToWidth
+                } else {
+                    PatternDirection::ParallelToLength
+                },
+                can_rotate: true,
+            });
+        }
+
+        let solution = optimizer
+            .set_cut_width(1)
+            .set_random_seed(1)
+            .optimize_nested(|_| {})
+            .unwrap();
+
+        sanity_check_solution(&solution, num_cut_pieces);
     }
 
     #[test]
