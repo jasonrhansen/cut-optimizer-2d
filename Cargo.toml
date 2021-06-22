@@ -17,3 +17,10 @@ serialize=["serde"]
 rand = "0.8.3"
 fnv = "1.0"
 serde = { version = "1.0", features=["derive"], optional = true }
+
+[dev-dependencies]
+criterion = "0.3"
+
+[[bench]]
+name = 'optimizer'
+harness = false
