@@ -463,7 +463,7 @@ fn guillotine_stock_quantity_too_low() {
 }
 
 #[test]
-fn guillotine_stock_quantity_ok() {
+fn guillotine_stock_quantity() {
     let solution = Optimizer::new()
         .add_stock_piece(StockPiece {
             width: 48,
@@ -492,6 +492,126 @@ fn guillotine_stock_quantity_ok() {
         .unwrap();
 
     sanity_check_solution(&solution, 2);
+}
+
+#[test]
+fn guillotine_stock_quantity_multiple() {
+    let solution = Optimizer::new()
+        .add_stock_piece(StockPiece {
+            width: 48,
+            length: 96,
+            pattern_direction: PatternDirection::None,
+            price: 0,
+            quantity: Some(2),
+        })
+        .add_stock_piece(StockPiece {
+            width: 64,
+            length: 192,
+            pattern_direction: PatternDirection::None,
+            price: 0,
+            quantity: Some(1),
+        })
+        .add_cut_piece(CutPiece {
+            external_id: None,
+            width: 48,
+            length: 96,
+            pattern_direction: PatternDirection::None,
+            can_rotate: false,
+        })
+        .add_cut_piece(CutPiece {
+            external_id: None,
+            width: 48,
+            length: 96,
+            pattern_direction: PatternDirection::None,
+            can_rotate: false,
+        })
+        .add_cut_piece(CutPiece {
+            external_id: None,
+            width: 64,
+            length: 192,
+            pattern_direction: PatternDirection::None,
+            can_rotate: false,
+        })
+        .set_cut_width(0)
+        .set_random_seed(1)
+        .optimize_guillotine(|_| {})
+        .unwrap();
+
+    sanity_check_solution(&solution, 3);
+}
+
+#[test]
+fn guillotine_one_stock_piece_several_cut_pieces() {
+    let solution = Optimizer::new()
+        .add_stock_piece(StockPiece {
+            width: 48,
+            length: 96,
+            pattern_direction: PatternDirection::None,
+            price: 0,
+            quantity: Some(1),
+        })
+        .add_cut_piece(CutPiece {
+            external_id: None,
+            width: 8,
+            length: 96,
+            pattern_direction: PatternDirection::None,
+            can_rotate: false,
+        })
+        .add_cut_piece(CutPiece {
+            external_id: None,
+            width: 40,
+            length: 10,
+            pattern_direction: PatternDirection::None,
+            can_rotate: false,
+        })
+        .add_cut_piece(CutPiece {
+            external_id: None,
+            width: 40,
+            length: 10,
+            pattern_direction: PatternDirection::None,
+            can_rotate: false,
+        })
+        .add_cut_piece(CutPiece {
+            external_id: None,
+            width: 20,
+            length: 20,
+            pattern_direction: PatternDirection::None,
+            can_rotate: false,
+        })
+        .add_cut_piece(CutPiece {
+            external_id: None,
+            width: 20,
+            length: 20,
+            pattern_direction: PatternDirection::None,
+            can_rotate: false,
+        })
+        .add_cut_piece(CutPiece {
+            external_id: None,
+            width: 20,
+            length: 20,
+            pattern_direction: PatternDirection::None,
+            can_rotate: false,
+        })
+        .add_cut_piece(CutPiece {
+            external_id: None,
+            width: 20,
+            length: 20,
+            pattern_direction: PatternDirection::None,
+            can_rotate: false,
+        })
+        .add_cut_piece(CutPiece {
+            external_id: None,
+            width: 40,
+            length: 36,
+            pattern_direction: PatternDirection::None,
+            can_rotate: false,
+        })
+        .set_cut_width(0)
+        .set_random_seed(1)
+        .optimize_guillotine(|_| {})
+        .unwrap();
+
+    sanity_check_solution(&solution, 8);
 }
 
 #[test]
