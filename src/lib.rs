@@ -416,6 +416,9 @@ where
     // Stock pieces that are currently available to use for new bins.
     available_stock_pieces: Vec<StockPiece>,
 
+    // Cut pieces that couldn't be added to bins.
+    unused_cut_pieces: HashSet<CutPieceWithId>,
+
     blade_width: usize,
 }
 
@@ -436,12 +439,13 @@ where
             bins: Vec::new(),
             possible_stock_pieces,
             available_stock_pieces: possible_stock_pieces.to_vec(),
+            unused_cut_pieces: Default::default(),
             blade_width,
         };
 
         for cut_piece in cut_pieces {
             if !unit.first_fit_random_heuristics(cut_piece, rng) {
-                return Err(no_fit_for_cut_piece_error(cut_piece));
+                unit.unused_cut_pieces.insert((*cut_piece).clone());
             }
         }
 
@@ -462,12 +466,13 @@ where
             bins: Vec::new(),
             possible_stock_pieces,
             available_stock_pieces: possible_stock_pieces.to_vec(),
+            unused_cut_pieces: Default::default(),
             blade_width,
         };
 
         for cut_piece in cut_pieces {
             if !unit.first_fit_with_heuristic(cut_piece, heuristic, rng) {
-                return Err(no_fit_for_cut_piece_error(cut_piece));
+                unit.unused_cut_pieces.insert((*cut_piece).clone());
             }
         }
 
@@ -614,9 +619,23 @@ where
         R: Rng + ?Sized,
         B: Clone,
     {
-        let cross_dest = rng.gen_range(0..self.bins.len() + 1);
-        let cross_src_start = rng.gen_range(0..other.bins.len());
-        let cross_src_end = rng.gen_range(cross_src_start + 1..other.bins.len() + 1);
+        let cross_dest = if self.bins.is_empty() {
+            0
+        } else {
+            rng.gen_range(0..self.bins.len() + 1)
+        };
+
+        let cross_src_start = if other.bins.is_empty() {
+            0
+        } else {
+            rng.gen_range(0..other.bins.len())
+        };
+
+        let cross_src_end = if other.bins.is_empty() {
+            0
+        } else {
+            rng.gen_range(cross_src_start + 1..other.bins.len() + 1)
+        };
 
         let mut new_unit = OptimizerUnit {
             // Inject bins between crossing sites of other.
@@ -628,6 +647,7 @@ where
                 .collect(),
             possible_stock_pieces: self.possible_stock_pieces,
             available_stock_pieces: self.possible_stock_pieces.to_vec(),
+            unused_cut_pieces: Default::default(),
             blade_width: self.blade_width,
         };
 
@@ -646,7 +666,7 @@ where
                 }
             });
 
-        let mut removed_cut_pieces: Vec<UsedCutPiece> = Vec::new();
+        let mut removed_cut_pieces: Vec<CutPieceWithId> = Vec::new();
         for i in (0..cross_dest)
             .chain(cross_dest + cross_src_end - cross_src_start..new_unit.bins.len())
             .rev()
@@ -664,7 +684,7 @@ where
                     .cloned();
                 if bin.remove_cut_pieces(injected_cut_pieces) > 0 {
                     for cut_piece in bin.cut_pieces().cloned() {
-                        removed_cut_pieces.push(cut_piece);
+                        removed_cut_pieces.push(cut_piece.into());
                     }
                     new_unit.bins.remove(i);
                 } else {
@@ -675,15 +695,20 @@ where
             } else {
                 // There's no available stock piece left for this bin so remove it.
                 for cut_piece in bin.cut_pieces().cloned() {
-                    removed_cut_pieces.push(cut_piece);
+                    removed_cut_pieces.push(cut_piece.into());
                 }
                 new_unit.bins.remove(i);
             }
         }
 
-        for cut_piece in removed_cut_pieces {
-            if !new_unit.first_fit_random_heuristics(&cut_piece.into(), rng) {
-                panic!("Non-fitting cut piece in crossover operation. This shouldn't happen, and means there is a bug in the code.");
+        let unused_cut_pieces = removed_cut_pieces
+            .iter()
+            .chain(self.unused_cut_pieces.iter())
+            .chain(other.unused_cut_pieces.iter());
+
+        for cut_piece in unused_cut_pieces {
+            if !new_unit.first_fit_random_heuristics(cut_piece, rng) {
+                new_unit.unused_cut_pieces.insert(cut_piece.clone());
             }
         }
 
@@ -700,7 +725,7 @@ where
     where
         R: Rng + ?Sized,
     {
-        if let 1 = rng.gen_range(0..20) {
+        if !self.bins.is_empty() && rng.gen_range(0..20) == 1 {
             self.inversion(rng)
         }
     }
@@ -721,7 +746,19 @@ where
     B: Bin + Send + Clone,
 {
     fn fitness(&self) -> f64 {
-        self.bins.iter().fold(0.0, |acc, b| acc + b.fitness()) / self.bins.len() as f64
+        let fitness = if self.bins.is_empty() {
+            0.0
+        } else {
+            self.bins.iter().fold(0.0, |acc, b| acc + b.fitness()) / self.bins.len() as f64
+        };
+
+        if self.unused_cut_pieces.is_empty() {
+            fitness
+        } else {
+            // If there are unused cut pieces, the fitness is below 0 because it's not a valid
+            // solution.
+            fitness - 1.0
+        }
     }
 
     fn breed_with<R>(&self, other: &OptimizerUnit<'a, B>, rng: &mut R) -> OptimizerUnit<'a, B>
@@ -967,7 +1004,11 @@ impl Optimizer {
                     Ok(ref best_solution) => {
                         // Use the lower-priced solution, but if the prices are the same, use the
                         // solution with the higher fitness score.
-                        if solution.price < best_solution.price
+                        if solution.fitness < 0.0 || best_solution.fitness < 0.0 {
+                            if solution.fitness > best_solution.fitness {
+                                best_result = Ok(solution);
+                            }
+                        } else if solution.price < best_solution.price
                             || (solution.price == best_solution.price
                                 && solution.fitness > best_solution.fitness)
                         {
@@ -1016,8 +1057,13 @@ impl Optimizer {
             .finish();
 
         let best_unit = &mut result_units[0];
-        let fitness = best_unit.fitness();
+        if !best_unit.unused_cut_pieces.is_empty() {
+            return Err(no_fit_for_cut_piece_error(
+                best_unit.unused_cut_pieces.iter().next().unwrap(),
+            ));
+        }
 
+        let fitness = best_unit.fitness();
         let price = best_unit.bins.iter().map(|bin| bin.price()).sum();
 
         let used_stock_pieces: Vec<ResultStockPiece> =
