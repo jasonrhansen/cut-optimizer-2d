@@ -690,7 +690,9 @@ where
                 } else {
                     // We're keeping this bin so decrement the quantity of the available stock
                     // piece.
-                    stock_piece.dec_quantity();
+                    if stock_piece.quantity != Some(0) {
+                        stock_piece.dec_quantity();
+                    }
                 }
             } else {
                 // There's no available stock piece left for this bin so remove it.
