@@ -615,6 +615,45 @@ fn guillotine_one_stock_piece_several_cut_pieces() {
 }
 
 #[test]
+fn guillotine_stock_duplicate_cut_piece() {
+    let solution = Optimizer::new()
+        .add_stock_piece(StockPiece {
+            width: 48,
+            length: 96,
+            pattern_direction: PatternDirection::None,
+            price: 0,
+            quantity: Some(1),
+        })
+        .add_stock_piece(StockPiece {
+            width: 64,
+            length: 192,
+            pattern_direction: PatternDirection::None,
+            price: 0,
+            quantity: Some(1),
+        })
+        .add_cut_piece(CutPiece {
+            external_id: None,
+            width: 48,
+            length: 96,
+            pattern_direction: PatternDirection::None,
+            can_rotate: false,
+        })
+        .add_cut_piece(CutPiece {
+            external_id: None,
+            width: 48,
+            length: 96,
+            pattern_direction: PatternDirection::None,
+            can_rotate: false,
+        })
+        .set_cut_width(1)
+        .set_random_seed(1)
+        .optimize_guillotine(|_| {})
+        .unwrap();
+
+    sanity_check_solution(&solution, 2);
+}
+
+#[test]
 fn guillotine_32_cut_pieces_on_1_stock_piece() {
     let mut optimizer = Optimizer::new();
     optimizer.add_stock_piece(StockPiece {
