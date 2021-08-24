@@ -675,7 +675,7 @@ where
             if let Some(ref mut stock_piece) = new_unit
                 .available_stock_pieces
                 .iter_mut()
-                .find(|sp| bin.matches_stock_piece(sp))
+                .find(|sp| sp.quantity != Some(0) && bin.matches_stock_piece(sp))
             {
                 // We found an available stock piece for this bin, so attempt to use it.
                 let injected_cut_pieces = (&other.bins[cross_src_start..cross_src_end])
@@ -690,9 +690,7 @@ where
                 } else {
                     // We're keeping this bin so decrement the quantity of the available stock
                     // piece.
-                    if stock_piece.quantity != Some(0) {
-                        stock_piece.dec_quantity();
-                    }
+                    stock_piece.dec_quantity();
                 }
             } else {
                 // There's no available stock piece left for this bin so remove it.
