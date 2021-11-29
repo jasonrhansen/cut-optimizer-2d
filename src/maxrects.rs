@@ -1,6 +1,7 @@
 /// Implementation of the Maximal Rectangles Algorithms for bin packing.
 /// [A Thousand Ways to Pack the Bin](http://pds25.egloos.com/pds/201504/21/98/RectangleBinPack.pdf)
 use super::*;
+use crate::guillotine::RotateCutPieceHeuristic;
 
 use rand::distributions::{Distribution, Standard};
 use rand::prelude::*;
@@ -42,7 +43,7 @@ pub(crate) struct MaxRectsBin {
 }
 
 impl Bin for MaxRectsBin {
-    type Heuristic = FreeRectChoiceHeuristic;
+    type Heuristic = (FreeRectChoiceHeuristic, RotateCutPieceHeuristic);
 
     fn new(
         width: usize,
@@ -126,11 +127,46 @@ impl Bin for MaxRectsBin {
 
     fn possible_heuristics() -> Vec<Self::Heuristic> {
         vec![
-            FreeRectChoiceHeuristic::BestShortSideFit,
-            FreeRectChoiceHeuristic::BestLongSideFit,
-            FreeRectChoiceHeuristic::BestAreaFit,
-            FreeRectChoiceHeuristic::BottomLeftRule,
-            FreeRectChoiceHeuristic::ContactPointRule,
+            (
+                FreeRectChoiceHeuristic::BestShortSideFit,
+                RotateCutPieceHeuristic::PreferUpright,
+            ),
+            (
+                FreeRectChoiceHeuristic::BestLongSideFit,
+                RotateCutPieceHeuristic::PreferUpright,
+            ),
+            (
+                FreeRectChoiceHeuristic::BestAreaFit,
+                RotateCutPieceHeuristic::PreferUpright,
+            ),
+            (
+                FreeRectChoiceHeuristic::BottomLeftRule,
+                RotateCutPieceHeuristic::PreferUpright,
+            ),
+            (
+                FreeRectChoiceHeuristic::ContactPointRule,
+                RotateCutPieceHeuristic::PreferUpright,
+            ),
+            (
+                FreeRectChoiceHeuristic::BestShortSideFit,
+                RotateCutPieceHeuristic::PreferRotated,
+            ),
+            (
+                FreeRectChoiceHeuristic::BestLongSideFit,
+                RotateCutPieceHeuristic::PreferRotated,
+            ),
+            (
+                FreeRectChoiceHeuristic::BestAreaFit,
+                RotateCutPieceHeuristic::PreferRotated,
+            ),
+            (
+                FreeRectChoiceHeuristic::BottomLeftRule,
+                RotateCutPieceHeuristic::PreferRotated,
+            ),
+            (
+                FreeRectChoiceHeuristic::ContactPointRule,
+                RotateCutPieceHeuristic::PreferRotated,
+            ),
         ]
     }
 
@@ -139,7 +175,7 @@ impl Bin for MaxRectsBin {
         cut_piece: &CutPieceWithId,
         heuristic: &Self::Heuristic,
     ) -> bool {
-        self.insert_with_heuristics(cut_piece, *heuristic)
+        self.insert_with_heuristics(cut_piece, heuristic.0, heuristic.1)
     }
 
     fn insert_cut_piece_random_heuristic<R>(
@@ -150,7 +186,7 @@ impl Bin for MaxRectsBin {
     where
         R: Rng + ?Sized,
     {
-        self.insert_with_heuristics(cut_piece, rng.gen())
+        self.insert_cut_piece_with_heuristic(cut_piece, &rng.gen())
     }
 
     fn matches_stock_piece(&self, stock_piece: &StockPiece) -> bool {
@@ -167,9 +203,12 @@ impl MaxRectsBin {
         &mut self,
         cut_piece: &CutPieceWithId,
         rect_choice: FreeRectChoiceHeuristic,
+        rotate_preference: RotateCutPieceHeuristic,
     ) -> bool {
+        let prefer_rotated = rotate_preference == RotateCutPieceHeuristic::PreferRotated;
+
         if let Some((best_rect, is_rotated)) =
-            self.find_placement_for_cut_piece(cut_piece, rect_choice)
+            self.find_placement_for_cut_piece(cut_piece, rect_choice, prefer_rotated)
         {
             for i in (0..self.free_rects.len()).rev() {
                 self.split_free_rect(i, &best_rect);
@@ -201,30 +240,39 @@ impl MaxRectsBin {
         &self,
         cut_piece: &CutPieceWithId,
         rect_choice: FreeRectChoiceHeuristic,
+        prefer_rotated: bool,
     ) -> Option<(Rect, bool)> {
         match rect_choice {
-            FreeRectChoiceHeuristic::BottomLeftRule => self.find_placement_bottom_left(cut_piece),
+            FreeRectChoiceHeuristic::BottomLeftRule => {
+                self.find_placement_bottom_left(cut_piece, prefer_rotated)
+            }
             FreeRectChoiceHeuristic::BestShortSideFit => {
-                self.find_placement_best_short_side_fit(cut_piece)
+                self.find_placement_best_short_side_fit(cut_piece, prefer_rotated)
             }
             FreeRectChoiceHeuristic::BestLongSideFit => {
-                self.find_placement_best_long_side_fit(cut_piece)
+                self.find_placement_best_long_side_fit(cut_piece, prefer_rotated)
             }
-            FreeRectChoiceHeuristic::BestAreaFit => self.find_placement_best_area_fit(cut_piece),
+            FreeRectChoiceHeuristic::BestAreaFit => {
+                self.find_placement_best_area_fit(cut_piece, prefer_rotated)
+            }
             FreeRectChoiceHeuristic::ContactPointRule => {
-                self.find_placement_contact_point(cut_piece)
+                self.find_placement_contact_point(cut_piece, prefer_rotated)
             }
         }
     }
 
-    fn find_placement_bottom_left(&self, cut_piece: &CutPieceWithId) -> Option<(Rect, bool)> {
+    fn find_placement_bottom_left(
+        &self,
+        cut_piece: &CutPieceWithId,
+        prefer_rotated: bool,
+    ) -> Option<(Rect, bool)> {
         let mut best_rect = Rect::default();
         let mut best_y = std::usize::MAX;
         let mut best_x = std::usize::MAX;
         let mut best_fit = Fit::None;
 
         for free_rect in &self.free_rects {
-            let fit = free_rect.fit_cut_piece(self.pattern_direction, cut_piece);
+            let fit = free_rect.fit_cut_piece(self.pattern_direction, cut_piece, prefer_rotated);
             if fit.is_upright() {
                 let top_side_y = free_rect.y + cut_piece.length;
                 if top_side_y < best_y || (top_side_y == best_y && free_rect.x < best_x) {
@@ -260,6 +308,7 @@ impl MaxRectsBin {
     fn find_placement_best_short_side_fit(
         &self,
         cut_piece: &CutPieceWithId,
+        prefer_rotated: bool,
     ) -> Option<(Rect, bool)> {
         let mut best_rect = Rect::default();
         let mut best_short_side_fit = std::usize::MAX;
@@ -267,7 +316,7 @@ impl MaxRectsBin {
         let mut best_fit = Fit::None;
 
         for free_rect in &self.free_rects {
-            let fit = free_rect.fit_cut_piece(self.pattern_direction, cut_piece);
+            let fit = free_rect.fit_cut_piece(self.pattern_direction, cut_piece, prefer_rotated);
             if fit.is_upright() {
                 let leftover_horiz =
                     (free_rect.width as isize - cut_piece.width as isize).abs() as usize;
@@ -319,6 +368,7 @@ impl MaxRectsBin {
     fn find_placement_best_long_side_fit(
         &self,
         cut_piece: &CutPieceWithId,
+        prefer_rotated: bool,
     ) -> Option<(Rect, bool)> {
         let mut best_rect = Rect::default();
         let mut best_short_side_fit = std::usize::MAX;
@@ -326,7 +376,7 @@ impl MaxRectsBin {
         let mut best_fit = Fit::None;
 
         for free_rect in &self.free_rects {
-            let fit = free_rect.fit_cut_piece(self.pattern_direction, cut_piece);
+            let fit = free_rect.fit_cut_piece(self.pattern_direction, cut_piece, prefer_rotated);
             if fit.is_upright() {
                 let leftover_horiz =
                     (free_rect.width as isize - cut_piece.width as isize).abs() as usize;
@@ -375,7 +425,11 @@ impl MaxRectsBin {
         }
     }
 
-    fn find_placement_best_area_fit(&self, cut_piece: &CutPieceWithId) -> Option<(Rect, bool)> {
+    fn find_placement_best_area_fit(
+        &self,
+        cut_piece: &CutPieceWithId,
+        prefer_rotated: bool,
+    ) -> Option<(Rect, bool)> {
         let mut best_rect = Rect::default();
         let mut best_area_fit = std::u64::MAX;
         let mut best_short_side_fit = std::u64::MAX;
@@ -391,7 +445,7 @@ impl MaxRectsBin {
 
             let area_fit = free_rect_area - cut_piece_area;
 
-            let fit = free_rect.fit_cut_piece(self.pattern_direction, cut_piece);
+            let fit = free_rect.fit_cut_piece(self.pattern_direction, cut_piece, prefer_rotated);
             if fit.is_upright() {
                 let leftover_horiz = (free_rect.width as i64 - cut_piece.width as i64).abs() as u64;
                 let leftover_vert =
@@ -436,13 +490,17 @@ impl MaxRectsBin {
         }
     }
 
-    fn find_placement_contact_point(&self, cut_piece: &CutPieceWithId) -> Option<(Rect, bool)> {
+    fn find_placement_contact_point(
+        &self,
+        cut_piece: &CutPieceWithId,
+        prefer_rotated: bool,
+    ) -> Option<(Rect, bool)> {
         let mut best_rect = Rect::default();
         let mut best_contact_score = 0;
         let mut best_fit = Fit::None;
 
         for free_rect in &self.free_rects {
-            let fit = free_rect.fit_cut_piece(self.pattern_direction, cut_piece);
+            let fit = free_rect.fit_cut_piece(self.pattern_direction, cut_piece, prefer_rotated);
             if fit.is_upright() {
                 let score = self.contact_point_score(
                     free_rect.x,

@@ -1529,3 +1529,85 @@ fn stock_pieces_dec_quantity() {
 
     assert_eq!(stock_piece.quantity, None);
 }
+
+#[test]
+fn guillotine_rotate_cut_pieces() {
+    let mut optimizer = Optimizer::new();
+    optimizer
+        .add_stock_piece(StockPiece {
+            width: 48,
+            length: 96,
+            pattern_direction: PatternDirection::None,
+            price: 0,
+            quantity: None,
+        })
+        .add_stock_piece(StockPiece {
+            width: 48,
+            length: 120,
+            pattern_direction: PatternDirection::None,
+            price: 0,
+            quantity: None,
+        })
+        .set_cut_width(1)
+        .set_random_seed(1)
+        .allow_mixed_stock_sizes(false);
+
+    for i in 0..16 {
+        optimizer.add_cut_piece(CutPiece {
+            external_id: Some(i),
+            width: 18,
+            length: 24,
+            pattern_direction: PatternDirection::None,
+            can_rotate: true,
+        });
+    }
+
+    let result = optimizer.optimize_guillotine(|_| {});
+
+    assert!(result.is_ok());
+    if let Ok(solution) = result {
+        assert_eq!(solution.stock_pieces.len(), 2);
+        assert_eq!(solution.stock_pieces[0].length, 96);
+    }
+}
+
+#[test]
+fn nested_rotate_cut_pieces() {
+    let mut optimizer = Optimizer::new();
+    optimizer
+        .add_stock_piece(StockPiece {
+            width: 48,
+            length: 96,
+            pattern_direction: PatternDirection::None,
+            price: 0,
+            quantity: None,
+        })
+        .add_stock_piece(StockPiece {
+            width: 48,
+            length: 120,
+            pattern_direction: PatternDirection::None,
+            price: 0,
+            quantity: None,
+        })
+        .set_cut_width(1)
+        .set_random_seed(1)
+        .allow_mixed_stock_sizes(false);
+
+    for i in 0..16 {
+        optimizer.add_cut_piece(CutPiece {
+            external_id: Some(i),
+            width: 18,
+            length: 24,
+            pattern_direction: PatternDirection::None,
+            can_rotate: true,
+        });
+    }
+
+    let result = optimizer.optimize_guillotine(|_| {});
+
+    assert!(result.is_ok());
+    if let Ok(solution) = result {
+        assert_eq!(solution.stock_pieces.len(), 2);
+        assert_eq!(solution.stock_pieces[0].length, 96);
+    }
+}

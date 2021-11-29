@@ -233,7 +233,7 @@ impl StockPiece {
             length: self.length,
         };
 
-        rect.fit_cut_piece(self.pattern_direction, cut_piece) != Fit::None
+        rect.fit_cut_piece(self.pattern_direction, cut_piece, false) != Fit::None
     }
 
     /// Decrement the quantity of this stock piece. If quantity is `None` it will remain `None`.
@@ -288,24 +288,45 @@ impl Rect {
         &self,
         pattern_direction: PatternDirection,
         cut_piece: &CutPieceWithId,
+        prefer_rotated: bool,
     ) -> Fit {
-        if cut_piece.pattern_direction == pattern_direction {
+        let upright_fit = if cut_piece.pattern_direction == pattern_direction {
             if cut_piece.width == self.width && cut_piece.length == self.length {
-                return Fit::UprightExact;
+                Some(Fit::UprightExact)
             } else if cut_piece.width <= self.width && cut_piece.length <= self.length {
-                return Fit::Upright;
+                Some(Fit::Upright)
+            } else {
+                None
             }
-        }
+        } else {
+            None
+        };
 
-        if cut_piece.can_rotate && cut_piece.pattern_direction.rotated() == pattern_direction {
-            if cut_piece.length == self.width && cut_piece.width == self.length {
-                return Fit::RotatedExact;
-            } else if cut_piece.length <= self.width && cut_piece.width <= self.length {
-                return Fit::Rotated;
+        let rotated_fit =
+            if cut_piece.can_rotate && cut_piece.pattern_direction.rotated() == pattern_direction {
+                if cut_piece.length == self.width && cut_piece.width == self.length {
+                    Some(Fit::RotatedExact)
+                } else if cut_piece.length <= self.width && cut_piece.width <= self.length {
+                    Some(Fit::Rotated)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+        match (upright_fit, rotated_fit) {
+            (Some(upright_fit), Some(rotated_fit)) => {
+                if prefer_rotated {
+                    rotated_fit
+                } else {
+                    upright_fit
+                }
             }
+            (Some(upright_fit), None) => upright_fit,
+            (None, Some(rotated_fit)) => rotated_fit,
+            (None, None) => Fit::None,
         }
-
-        Fit::None
     }
 
     fn contains(&self, rect: &Rect) -> bool {

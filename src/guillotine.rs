@@ -56,6 +56,22 @@ impl Distribution<SplitHeuristic> for Standard {
     }
 }
 
+/// Heuristic for determining whether to prefer rotating cut pieces.
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub(crate) enum RotateCutPieceHeuristic {
+    PreferUpright,
+    PreferRotated,
+}
+
+impl Distribution<RotateCutPieceHeuristic> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> RotateCutPieceHeuristic {
+        match rng.gen_range(0..2) {
+            0 => RotateCutPieceHeuristic::PreferUpright,
+            _ => RotateCutPieceHeuristic::PreferRotated,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct GuillotineBin {
     width: usize,
@@ -68,7 +84,11 @@ pub(crate) struct GuillotineBin {
 }
 
 impl Bin for GuillotineBin {
-    type Heuristic = (FreeRectChoiceHeuristic, SplitHeuristic);
+    type Heuristic = (
+        FreeRectChoiceHeuristic,
+        SplitHeuristic,
+        RotateCutPieceHeuristic,
+    );
 
     fn new(
         width: usize,
@@ -144,74 +164,182 @@ impl Bin for GuillotineBin {
             (
                 FreeRectChoiceHeuristic::BestAreaFit,
                 SplitHeuristic::ShorterLeftoverAxis,
+                RotateCutPieceHeuristic::PreferUpright,
             ),
             (
                 FreeRectChoiceHeuristic::BestAreaFit,
                 SplitHeuristic::LongerLeftoverAxis,
+                RotateCutPieceHeuristic::PreferUpright,
             ),
             (
                 FreeRectChoiceHeuristic::BestAreaFit,
                 SplitHeuristic::MinimizeArea,
+                RotateCutPieceHeuristic::PreferUpright,
             ),
             (
                 FreeRectChoiceHeuristic::BestAreaFit,
                 SplitHeuristic::MaximizeArea,
+                RotateCutPieceHeuristic::PreferUpright,
             ),
             (
                 FreeRectChoiceHeuristic::BestAreaFit,
                 SplitHeuristic::ShorterAxis,
+                RotateCutPieceHeuristic::PreferUpright,
             ),
             (
                 FreeRectChoiceHeuristic::BestAreaFit,
                 SplitHeuristic::LongerAxis,
+                RotateCutPieceHeuristic::PreferUpright,
             ),
             (
                 FreeRectChoiceHeuristic::BestShortSideFit,
                 SplitHeuristic::ShorterLeftoverAxis,
+                RotateCutPieceHeuristic::PreferUpright,
             ),
             (
                 FreeRectChoiceHeuristic::BestShortSideFit,
                 SplitHeuristic::LongerLeftoverAxis,
+                RotateCutPieceHeuristic::PreferUpright,
             ),
             (
                 FreeRectChoiceHeuristic::BestShortSideFit,
                 SplitHeuristic::MinimizeArea,
+                RotateCutPieceHeuristic::PreferUpright,
             ),
             (
                 FreeRectChoiceHeuristic::BestShortSideFit,
                 SplitHeuristic::MaximizeArea,
+                RotateCutPieceHeuristic::PreferUpright,
             ),
             (
                 FreeRectChoiceHeuristic::BestShortSideFit,
                 SplitHeuristic::ShorterAxis,
+                RotateCutPieceHeuristic::PreferUpright,
             ),
             (
                 FreeRectChoiceHeuristic::BestShortSideFit,
                 SplitHeuristic::LongerAxis,
+                RotateCutPieceHeuristic::PreferUpright,
             ),
             (
                 FreeRectChoiceHeuristic::BestLongSideFit,
                 SplitHeuristic::ShorterLeftoverAxis,
+                RotateCutPieceHeuristic::PreferUpright,
             ),
             (
                 FreeRectChoiceHeuristic::BestLongSideFit,
                 SplitHeuristic::LongerLeftoverAxis,
+                RotateCutPieceHeuristic::PreferUpright,
             ),
             (
                 FreeRectChoiceHeuristic::BestLongSideFit,
                 SplitHeuristic::MinimizeArea,
+                RotateCutPieceHeuristic::PreferUpright,
             ),
             (
                 FreeRectChoiceHeuristic::BestLongSideFit,
                 SplitHeuristic::MaximizeArea,
+                RotateCutPieceHeuristic::PreferUpright,
             ),
             (
                 FreeRectChoiceHeuristic::BestLongSideFit,
                 SplitHeuristic::ShorterAxis,
+                RotateCutPieceHeuristic::PreferUpright,
             ),
             (
                 FreeRectChoiceHeuristic::BestLongSideFit,
                 SplitHeuristic::LongerAxis,
+                RotateCutPieceHeuristic::PreferUpright,
+            ),
+            (
+                FreeRectChoiceHeuristic::BestAreaFit,
+                SplitHeuristic::ShorterLeftoverAxis,
+                RotateCutPieceHeuristic::PreferRotated,
+            ),
+            (
+                FreeRectChoiceHeuristic::BestAreaFit,
+                SplitHeuristic::LongerLeftoverAxis,
+                RotateCutPieceHeuristic::PreferRotated,
+            ),
+            (
+                FreeRectChoiceHeuristic::BestAreaFit,
+                SplitHeuristic::MinimizeArea,
+                RotateCutPieceHeuristic::PreferRotated,
+            ),
+            (
+                FreeRectChoiceHeuristic::BestAreaFit,
+                SplitHeuristic::MaximizeArea,
+                RotateCutPieceHeuristic::PreferRotated,
+            ),
+            (
+                FreeRectChoiceHeuristic::BestAreaFit,
+                SplitHeuristic::ShorterAxis,
+                RotateCutPieceHeuristic::PreferRotated,
+            ),
+            (
+                FreeRectChoiceHeuristic::BestAreaFit,
+                SplitHeuristic::LongerAxis,
+                RotateCutPieceHeuristic::PreferRotated,
+            ),
+            (
+                FreeRectChoiceHeuristic::BestShortSideFit,
+                SplitHeuristic::ShorterLeftoverAxis,
+                RotateCutPieceHeuristic::PreferRotated,
+            ),
+            (
+                FreeRectChoiceHeuristic::BestShortSideFit,
+                SplitHeuristic::LongerLeftoverAxis,
+                RotateCutPieceHeuristic::PreferRotated,
+            ),
+            (
+                FreeRectChoiceHeuristic::BestShortSideFit,
+                SplitHeuristic::MinimizeArea,
+                RotateCutPieceHeuristic::PreferRotated,
+            ),
+            (
+                FreeRectChoiceHeuristic::BestShortSideFit,
+                SplitHeuristic::MaximizeArea,
+                RotateCutPieceHeuristic::PreferRotated,
+            ),
+            (
+                FreeRectChoiceHeuristic::BestShortSideFit,
+                SplitHeuristic::ShorterAxis,
+                RotateCutPieceHeuristic::PreferRotated,
+            ),
+            (
+                FreeRectChoiceHeuristic::BestShortSideFit,
+                SplitHeuristic::LongerAxis,
+                RotateCutPieceHeuristic::PreferRotated,
+            ),
+            (
+                FreeRectChoiceHeuristic::BestLongSideFit,
+                SplitHeuristic::ShorterLeftoverAxis,
+                RotateCutPieceHeuristic::PreferRotated,
+            ),
+            (
+                FreeRectChoiceHeuristic::BestLongSideFit,
+                SplitHeuristic::LongerLeftoverAxis,
+                RotateCutPieceHeuristic::PreferRotated,
+            ),
+            (
+                FreeRectChoiceHeuristic::BestLongSideFit,
+                SplitHeuristic::MinimizeArea,
+                RotateCutPieceHeuristic::PreferRotated,
+            ),
+            (
+                FreeRectChoiceHeuristic::BestLongSideFit,
+                SplitHeuristic::MaximizeArea,
+                RotateCutPieceHeuristic::PreferRotated,
+            ),
+            (
+                FreeRectChoiceHeuristic::BestLongSideFit,
+                SplitHeuristic::ShorterAxis,
+                RotateCutPieceHeuristic::PreferRotated,
+            ),
+            (
+                FreeRectChoiceHeuristic::BestLongSideFit,
+                SplitHeuristic::LongerAxis,
+                RotateCutPieceHeuristic::PreferRotated,
             ),
         ]
     }
@@ -221,7 +349,7 @@ impl Bin for GuillotineBin {
         cut_piece: &CutPieceWithId,
         heuristic: &Self::Heuristic,
     ) -> bool {
-        self.insert_with_heuristics(cut_piece, true, heuristic.0, heuristic.1)
+        self.insert_with_heuristics(cut_piece, true, heuristic.0, heuristic.1, heuristic.2)
     }
 
     fn insert_cut_piece_random_heuristic<R>(
@@ -251,9 +379,12 @@ impl GuillotineBin {
         merge: bool,
         rect_choice: FreeRectChoiceHeuristic,
         split_method: SplitHeuristic,
+        rotate_preference: RotateCutPieceHeuristic,
     ) -> bool {
+        let prefer_rotated = rotate_preference == RotateCutPieceHeuristic::PreferRotated;
+
         if let Some((used_piece, free_index)) =
-            self.find_placement_for_cut_piece(cut_piece, rect_choice)
+            self.find_placement_for_cut_piece(cut_piece, rect_choice, prefer_rotated)
         {
             let free_rect = self.free_rects.swap_remove(free_index);
             self.split_free_rect_by_heuristic(&free_rect, &used_piece.rect, split_method);
@@ -274,6 +405,7 @@ impl GuillotineBin {
         &self,
         cut_piece: &CutPieceWithId,
         rect_choice: FreeRectChoiceHeuristic,
+        prefer_rotated: bool,
     ) -> Option<(UsedCutPiece, usize)> {
         let mut best_rect = Rect::default();
         let mut best_score = std::isize::MAX;
@@ -281,7 +413,7 @@ impl GuillotineBin {
         let mut free_index = None;
 
         for (i, free_rect) in self.free_rects.iter().enumerate() {
-            let fit = free_rect.fit_cut_piece(self.pattern_direction, cut_piece);
+            let fit = free_rect.fit_cut_piece(self.pattern_direction, cut_piece, prefer_rotated);
             match fit {
                 Fit::UprightExact => {
                     best_rect.x = free_rect.x;
