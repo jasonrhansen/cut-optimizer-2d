@@ -263,6 +263,9 @@ pub struct ResultStockPiece {
 
     /// Waste pieces that remain after cutting the cut pieces.
     pub waste_pieces: Vec<Rect>,
+
+    /// Price of stock piece.
+    pub price: usize,
 }
 
 /// A rectangle
