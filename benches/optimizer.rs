@@ -55,21 +55,25 @@ fn build_optimizer() -> Optimizer {
 }
 
 pub fn benchmark_guillotine(c: &mut Criterion) {
-    c.bench_function("guillotine random cut pieces", |b| b.iter(|| {
-        let _ = build_optimizer()
-            .set_cut_width(1)
-            .set_random_seed(1)
-            .optimize_guillotine(|_| {});
-    }));
+    c.bench_function("guillotine random cut pieces", |b| {
+        b.iter(|| {
+            let _ = build_optimizer()
+                .set_cut_width(1)
+                .set_random_seed(1)
+                .optimize_guillotine(|_| {});
+        })
+    });
 }
 
 pub fn benchmark_maxrects(c: &mut Criterion) {
-    c.bench_function("maxrects random cut pieces", |b| b.iter(|| {
-        let _ = build_optimizer()
-            .set_cut_width(1)
-            .set_random_seed(1)
-            .optimize_guillotine(|_| {});
-    }));
+    c.bench_function("maxrects random cut pieces", |b| {
+        b.iter(|| {
+            let _ = build_optimizer()
+                .set_cut_width(1)
+                .set_random_seed(1)
+                .optimize_guillotine(|_| {});
+        })
+    });
 }
 
 criterion_group!(benches, benchmark_guillotine, benchmark_maxrects);
