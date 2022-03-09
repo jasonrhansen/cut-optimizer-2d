@@ -72,7 +72,7 @@ pub fn benchmark_maxrects(c: &mut Criterion) {
             let _ = build_optimizer()
                 .set_cut_width(1)
                 .set_random_seed(1)
-                .optimize_guillotine(|_| {});
+                .optimize_nested(|_| {});
         })
     });
 }
