@@ -39,6 +39,7 @@ fn build_optimizer() -> Optimizer {
 
     for i in 0..num_cut_pieces {
         optimizer.add_cut_piece(CutPiece {
+            quantity: 1,
             external_id: Some(i),
             width: rng.gen_range(1..=48),
             length: rng.gen_range(1..=120),
