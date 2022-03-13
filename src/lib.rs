@@ -634,10 +634,10 @@ where
         R: Rng + ?Sized,
         B: Clone,
     {
-        let cross_dest = if self.bins.is_empty() {
+        let cross_dest = if self.bins.len() < 2 {
             0
         } else {
-            rng.gen_range(0..self.bins.len() + 1)
+            rng.gen_range(0..=self.bins.len())
         };
 
         let cross_src_start = if other.bins.is_empty() {
@@ -646,10 +646,10 @@ where
             rng.gen_range(0..other.bins.len())
         };
 
-        let cross_src_end = if other.bins.is_empty() {
+        let cross_src_end = if other.bins.len() < 2 {
             0
         } else {
-            rng.gen_range(cross_src_start + 1..other.bins.len() + 1)
+            rng.gen_range(cross_src_start + 1..=other.bins.len())
         };
 
         let mut new_unit = OptimizerUnit {

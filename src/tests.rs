@@ -473,7 +473,33 @@ fn guillotine_stock_quantity_too_low() {
 }
 
 #[test]
-fn guillotine_stock_quantity() {
+fn guillotine_stock_quantity_1() {
+    let solution = Optimizer::new()
+        .add_stock_piece(StockPiece {
+            width: 48,
+            length: 96,
+            pattern_direction: PatternDirection::None,
+            price: 0,
+            quantity: Some(1),
+        })
+        .add_cut_piece(CutPiece {
+            quantity: 1,
+            external_id: None,
+            width: 10,
+            length: 96,
+            pattern_direction: PatternDirection::None,
+            can_rotate: false,
+        })
+        .set_cut_width(1)
+        .set_random_seed(1)
+        .optimize_guillotine(|_| {})
+        .unwrap();
+
+    sanity_check_solution(&solution, 1);
+}
+
+#[test]
+fn guillotine_stock_quantity_2() {
     let solution = Optimizer::new()
         .add_stock_piece(StockPiece {
             width: 48,
@@ -485,7 +511,7 @@ fn guillotine_stock_quantity() {
         .add_cut_piece(CutPiece {
             quantity: 2,
             external_id: None,
-            width: 48,
+            width: 10,
             length: 96,
             pattern_direction: PatternDirection::None,
             can_rotate: false,
@@ -1182,7 +1208,33 @@ fn nested_stock_quantity_too_low() {
 }
 
 #[test]
-fn nested_stock_quantity_ok() {
+fn nested_stock_quantity_1() {
+    let solution = Optimizer::new()
+        .add_stock_piece(StockPiece {
+            width: 48,
+            length: 96,
+            pattern_direction: PatternDirection::None,
+            price: 0,
+            quantity: Some(1),
+        })
+        .add_cut_piece(CutPiece {
+            quantity: 1,
+            external_id: None,
+            width: 10,
+            length: 96,
+            pattern_direction: PatternDirection::None,
+            can_rotate: false,
+        })
+        .set_cut_width(1)
+        .set_random_seed(1)
+        .optimize_nested(|_| {})
+        .unwrap();
+
+    sanity_check_solution(&solution, 1);
+}
+
+#[test]
+fn nested_stock_quantity_2() {
     let solution = Optimizer::new()
         .add_stock_piece(StockPiece {
             width: 48,
@@ -1194,7 +1246,7 @@ fn nested_stock_quantity_ok() {
         .add_cut_piece(CutPiece {
             quantity: 2,
             external_id: None,
-            width: 48,
+            width: 10,
             length: 96,
             pattern_direction: PatternDirection::None,
             can_rotate: false,
