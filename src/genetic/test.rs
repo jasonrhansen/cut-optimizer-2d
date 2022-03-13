@@ -18,10 +18,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-extern crate rand;
-
-use rand::distributions::{IndependentSample, Range};
-use unit::Unit;
+use super::unit::Unit;
+use rand::prelude::*;
 
 #[derive(Default, Clone)]
 struct MockUnit {
@@ -33,7 +31,10 @@ impl Unit for MockUnit {
         self.fitness
     }
 
-    fn breed_with(&self, _: &Self) -> Self {
+    fn breed_with<R>(&self, _other: &Self, _rng: &mut R) -> Self
+    where
+        R: Rng + ?Sized,
+    {
         MockUnit { fitness: 1.0 }
     }
 }
@@ -49,7 +50,10 @@ impl Unit for FloatyUnit {
         (self.x + self.y) / 2.0
     }
 
-    fn breed_with(&self, other: &Self) -> Self {
+    fn breed_with<R>(&self, other: &Self, _rng: &mut R) -> Self
+    where
+        R: Rng + ?Sized,
+    {
         FloatyUnit {
             x: self.x * 1.01,
             y: other.y * 1.01,
@@ -68,10 +72,12 @@ impl Unit for TendUnit {
         -(self.towards - self.x).abs()
     }
 
-    fn breed_with(&self, other: &Self) -> Self {
-        let between = Range::new(-0.1, 0.1);
+    fn breed_with<R>(&self, other: &Self, rng: &mut R) -> Self
+    where
+        R: Rng + ?Sized,
+    {
         TendUnit {
-            x: ((self.x + other.x) / 2.0) + between.ind_sample(&mut rand::thread_rng()),
+            x: ((self.x + other.x) / 2.0) + rng.gen_range(-0.1..0.1),
             towards: self.towards,
         }
     }
@@ -79,8 +85,8 @@ impl Unit for TendUnit {
 
 #[cfg(test)]
 mod tests {
-    use population::Population;
-    use test::{FloatyUnit, MockUnit, TendUnit};
+    use super::super::population::Population;
+    use super::{FloatyUnit, MockUnit, TendUnit};
 
     #[test]
     fn simple_compilation_test() {
@@ -89,7 +95,7 @@ mod tests {
             Population::new(vec![MockUnit { fitness: 0.2 }, MockUnit { fitness: 0.1 }])
                 .set_size(10)
                 .set_breed_factor(1.0)
-                .epochs(100)
+                .epochs(100, &|_| {})
                 .finish();
 
         assert_eq!(best_units.len(), 10);
@@ -125,7 +131,7 @@ mod tests {
         let best_unit = Population::new(test_vec.clone())
             .set_size(100)
             .set_breed_factor(0.25)
-            .epochs(100)
+            .epochs(100, &|_| {})
             .finish()
             .get(0)
             .unwrap()
@@ -152,33 +158,7 @@ mod tests {
             .set_size(100)
             .set_breed_factor(0.5)
             .set_survival_factor(0.0)
-            .epochs(500)
-            .finish()
-            .get(0)
-            .unwrap()
-            .clone();
-
-        assert_eq!(best_unit.x.round(), towards);
-    }
-
-    #[test]
-    fn parallel_epochs_test() {
-        let towards = 10.0;
-        let test_vec = vec![
-            TendUnit {
-                x: 0.1,
-                towards: towards,
-            },
-            TendUnit {
-                x: 2.3,
-                towards: towards,
-            },
-        ];
-
-        let best_unit = Population::new(test_vec.clone())
-            .set_size(200)
-            .set_breed_factor(0.25)
-            .epochs_parallel(100, 2)
+            .epochs(500, &|_| {})
             .finish()
             .get(0)
             .unwrap()
@@ -201,7 +181,7 @@ mod tests {
             .set_size(200)
             .set_rand_seed(10)
             .set_breed_factor(0.3)
-            .epochs(200)
+            .epochs(200, &|_| {})
             .finish()
             .get(0)
             .unwrap()
@@ -211,7 +191,7 @@ mod tests {
             .set_size(200)
             .set_rand_seed(10)
             .set_breed_factor(0.3)
-            .epochs(200)
+            .epochs(200, &|_| {})
             .finish()
             .get(0)
             .unwrap()
