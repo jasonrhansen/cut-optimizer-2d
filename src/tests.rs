@@ -1604,3 +1604,47 @@ fn nested_rotate_cut_pieces() {
         assert_eq!(solution.stock_pieces[0].length, 96);
     }
 }
+
+#[test]
+fn pighetti_github_issue_12() {
+    let mut optimizer = Optimizer::new();
+
+    let plywood = StockPiece {
+        quantity: Some(3),
+        length: 2440,
+        width: 1220,
+        pattern_direction: PatternDirection::ParallelToLength,
+        price: 130,
+    };
+
+    let cut_piece_a = CutPiece {
+        quantity: 12,
+        external_id: Some(1),
+        length: 775,
+        width: 150,
+        can_rotate: false,
+        pattern_direction: PatternDirection::ParallelToLength,
+    };
+
+    let cut_piece_b = CutPiece {
+        quantity: 25,
+        external_id: Some(1),
+        length: 450,
+        width: 100,
+        can_rotate: false,
+        pattern_direction: PatternDirection::ParallelToLength,
+    };
+
+    optimizer.add_stock_piece(plywood);
+    optimizer.add_cut_piece(cut_piece_a);
+    optimizer.add_cut_piece(cut_piece_b);
+    optimizer.set_cut_width(2);
+
+    let result = optimizer.optimize_guillotine(|_| {});
+
+    assert!(result.is_ok());
+    if let Ok(solution) = result {
+        assert_eq!(solution.stock_pieces.len(), 1);
+        sanity_check_solution(&solution, 37);
+    }
+}
