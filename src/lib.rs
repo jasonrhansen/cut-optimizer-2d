@@ -437,6 +437,21 @@ where
     blade_width: usize,
 }
 
+impl<'a, B> Clone for OptimizerUnit<'a, B>
+where
+    B: Bin + Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            bins: self.bins.clone(),
+            possible_stock_pieces: self.possible_stock_pieces,
+            available_stock_pieces: self.available_stock_pieces.to_vec(),
+            unused_cut_pieces: self.unused_cut_pieces.clone(),
+            blade_width: self.blade_width,
+        }
+    }
+}
+
 impl<'a, B> OptimizerUnit<'a, B>
 where
     B: Bin,
@@ -634,23 +649,15 @@ where
         R: Rng + ?Sized,
         B: Clone,
     {
-        let cross_dest = if self.bins.len() < 2 {
-            0
-        } else {
-            rng.gen_range(0..=self.bins.len())
-        };
+        // If there aren't multiple bins we can't do a crossover, so just return a clone of this
+        // unit.
+        if self.bins.len() < 2 && other.bins.len() < 2 {
+            return self.clone();
+        }
 
-        let cross_src_start = if other.bins.is_empty() {
-            0
-        } else {
-            rng.gen_range(0..other.bins.len())
-        };
-
-        let cross_src_end = if other.bins.len() < 2 {
-            0
-        } else {
-            rng.gen_range(cross_src_start + 1..=other.bins.len())
-        };
+        let cross_dest = rng.gen_range(0..=self.bins.len());
+        let cross_src_start = rng.gen_range(0..other.bins.len());
+        let cross_src_end = rng.gen_range(cross_src_start + 1..=other.bins.len());
 
         let mut new_unit = OptimizerUnit {
             // Inject bins between crossing sites of other.
