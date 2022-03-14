@@ -9,6 +9,26 @@ use smallvec::{smallvec, SmallVec};
 use std::borrow::Borrow;
 use std::cmp;
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+struct VerticalCut {
+    x: usize,
+    start_y: usize,
+    end_y: usize,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+struct HorizontalCut {
+    y: usize,
+    start_x: usize,
+    end_x: usize,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum Cut {
+    Vertical(VerticalCut),
+    Horizontal(HorizontalCut),
+}
+
 /// Heuristics for deciding which of the free rectangles to place the demand piece in.
 #[allow(dead_code)]
 #[derive(Copy, Clone)]
@@ -81,6 +101,7 @@ pub(crate) struct GuillotineBin {
     pattern_direction: PatternDirection,
     cut_pieces: SmallVec<[UsedCutPiece; 8]>,
     free_rects: SmallVec<[Rect; 8]>,
+    cuts: SmallVec<[Cut; 8]>,
     price: usize,
 }
 
@@ -115,6 +136,7 @@ impl Bin for GuillotineBin {
             blade_width,
             pattern_direction,
             cut_pieces: Default::default(),
+            cuts: Default::default(),
             price,
         }
     }
@@ -126,12 +148,27 @@ impl Bin for GuillotineBin {
             .fold(0, |acc, p| acc + p.rect.width as u64 * p.rect.length as u64)
             as f64;
 
-        let free_area =
-            self.free_rects
-                .iter()
-                .fold(0, |acc, fr| acc + fr.width as u64 * fr.length as u64) as f64;
+        let free_area = self.free_rects.iter().fold(0, |acc, fr| {
+            let mut width = fr.width;
+            if fr.x > 0 {
+                width += self.blade_width;
+            }
+            if fr.x + fr.width < self.width {
+                width += self.blade_width;
+            }
+            let mut length = fr.length;
+            if fr.y > 0 {
+                length += self.blade_width;
+            }
+            if fr.y + fr.length < self.length {
+                length += self.blade_width;
+            }
 
-        (used_area / (used_area + free_area) as f64).powf(2.0 + self.free_rects.len() as f64 * 0.01)
+            acc + width as u64 * length as u64
+        }) as f64;
+
+        (used_area / (used_area + free_area) as f64)
+            .powf(2.0 + (self.free_rects.len() + self.num_cut_lines()) as f64 * 0.01)
     }
 
     fn price(&self) -> usize {
@@ -552,6 +589,11 @@ impl GuillotineBin {
                 length: bottom_length,
             };
             self.free_rects.push(bottom);
+            self.cuts.push(Cut::Horizontal(HorizontalCut {
+                y: bottom.y,
+                start_x: bottom.x,
+                end_x: bottom.x + bottom.width,
+            }));
         }
         if right_width > 0 && right_length > 0 {
             let right = Rect {
@@ -561,6 +603,17 @@ impl GuillotineBin {
                 length: right_length,
             };
             self.free_rects.push(right);
+            self.cuts.push(Cut::Vertical(VerticalCut {
+                x: right.x,
+                start_y: right.y,
+                end_y: right.y + right.length,
+            }));
+        }
+    }
+
+    fn remove_cut(&mut self, cut: &Cut) {
+        if let Some(index) = self.cuts.iter().position(|c| c == cut) {
+            self.cuts.swap_remove(index);
         }
     }
 
@@ -574,12 +627,22 @@ impl GuillotineBin {
                     if self.free_rects[i].y
                         == self.free_rects[j].y + self.free_rects[j].length + self.blade_width
                     {
+                        self.remove_cut(&Cut::Horizontal(HorizontalCut {
+                            y: self.free_rects[i].y,
+                            start_x: self.free_rects[i].x,
+                            end_x: self.free_rects[i].x + self.free_rects[i].width,
+                        }));
                         self.free_rects[i].y -= self.free_rects[j].length + self.blade_width;
                         self.free_rects[i].length += self.free_rects[j].length + self.blade_width;
                         self.free_rects.swap_remove(j);
                     } else if self.free_rects[i].y + self.free_rects[i].length + self.blade_width
                         == self.free_rects[j].y
                     {
+                        self.remove_cut(&Cut::Horizontal(HorizontalCut {
+                            y: self.free_rects[j].y,
+                            start_x: self.free_rects[j].x,
+                            end_x: self.free_rects[j].x + self.free_rects[j].width,
+                        }));
                         self.free_rects[i].length += self.free_rects[j].length + self.blade_width;
                         self.free_rects.swap_remove(j);
                     }
@@ -589,18 +652,57 @@ impl GuillotineBin {
                     if self.free_rects[i].x
                         == self.free_rects[j].x + self.free_rects[j].width + self.blade_width
                     {
+                        self.remove_cut(&Cut::Vertical(VerticalCut {
+                            x: self.free_rects[i].x,
+                            start_y: self.free_rects[i].y,
+                            end_y: self.free_rects[i].y + self.free_rects[i].length,
+                        }));
                         self.free_rects[i].x -= self.free_rects[j].width + self.blade_width;
                         self.free_rects[i].width += self.free_rects[j].width + self.blade_width;
                         self.free_rects.swap_remove(j);
                     } else if self.free_rects[i].x + self.free_rects[i].width + self.blade_width
                         == self.free_rects[j].x
                     {
+                        self.remove_cut(&Cut::Vertical(VerticalCut {
+                            x: self.free_rects[j].x,
+                            start_y: self.free_rects[j].y,
+                            end_y: self.free_rects[j].y + self.free_rects[j].length,
+                        }));
                         self.free_rects[i].width += self.free_rects[j].width + self.blade_width;
                         self.free_rects.swap_remove(j);
                     }
                 }
             }
         }
+    }
+
+    fn num_cut_lines(&self) -> usize {
+        let mut num_cut_lines = self.cuts.len();
+        for i in 0..self.cuts.len() {
+            for j in i + 1..self.cuts.len() {
+                match (&self.cuts[i], &self.cuts[j]) {
+                    (Cut::Horizontal(hor_i), Cut::Horizontal(hor_j)) => {
+                        if hor_i.y == hor_j.y
+                            && (hor_i.end_x + self.blade_width == hor_j.start_x
+                                || hor_j.end_x + self.blade_width == hor_i.start_x)
+                        {
+                            num_cut_lines -= 1;
+                        }
+                    }
+                    (Cut::Vertical(ver_i), Cut::Vertical(ver_j)) => {
+                        if ver_i.x == ver_j.x
+                            && (ver_i.end_y + self.blade_width == ver_j.start_y
+                                || ver_j.end_y + self.blade_width == ver_i.start_y)
+                        {
+                            num_cut_lines -= 1;
+                        }
+                    }
+                    _ => (),
+                };
+            }
+        }
+
+        num_cut_lines
     }
 }
 
@@ -761,6 +863,7 @@ mod tests {
             pattern_direction: PatternDirection::None,
             cut_pieces: Default::default(),
             free_rects: Default::default(),
+            cuts: Default::default(),
             price: 0,
         };
 
@@ -784,6 +887,7 @@ mod tests {
             pattern_direction: PatternDirection::None,
             cut_pieces: Default::default(),
             free_rects: Default::default(),
+            cuts: Default::default(),
             price: 0,
         };
 

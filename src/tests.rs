@@ -1744,3 +1744,82 @@ fn deterministic_solutions() {
             })
     });
 }
+
+#[test]
+fn minimize_cut_lines() {
+    let plywood = StockPiece {
+        width: 1220,
+        length: 2240,
+        pattern_direction: PatternDirection::ParallelToLength,
+        price: 130,
+        quantity: Some(1),
+    };
+
+    let top_left = CutPiece {
+        quantity: 1,
+        external_id: Some(1),
+        width: 500,
+        length: 835,
+        can_rotate: false,
+        pattern_direction: PatternDirection::ParallelToLength,
+    };
+
+    let bottom1 = CutPiece {
+        quantity: 1,
+        external_id: Some(2),
+        width: 500,
+        length: 1250,
+        can_rotate: false,
+        pattern_direction: PatternDirection::ParallelToLength,
+    };
+
+    let bottom2 = CutPiece {
+        quantity: 1,
+        external_id: Some(3),
+        width: 500,
+        length: 1250,
+        can_rotate: false,
+        pattern_direction: PatternDirection::ParallelToLength,
+    };
+
+    let top_right = CutPiece {
+        quantity: 1,
+        external_id: Some(4),
+        width: 575,
+        length: 875,
+        can_rotate: false,
+        pattern_direction: PatternDirection::ParallelToLength,
+    };
+
+    let mut optimizer = Optimizer::new();
+    optimizer.add_stock_piece(plywood);
+    optimizer.add_cut_piece(top_left);
+    optimizer.add_cut_piece(bottom1);
+    optimizer.add_cut_piece(bottom2);
+    optimizer.add_cut_piece(top_right);
+    optimizer.set_cut_width(2);
+
+    let result = optimizer.optimize_guillotine(|_| {});
+
+    let solution = result.unwrap();
+    assert_eq!(solution.stock_pieces.len(), 1);
+    sanity_check_solution(&solution, 4);
+
+    let stock_piece = &solution.stock_pieces[0];
+    for cut_piece in &stock_piece.cut_pieces {
+        match cut_piece.external_id.unwrap() {
+            1 => {
+                assert_eq!(cut_piece.x, 0);
+                assert_eq!(cut_piece.y, 1252);
+            }
+            2 | 3 => {
+                assert_eq!(cut_piece.y, 0);
+            }
+            4 => {
+                assert_eq!(cut_piece.x, 502);
+                assert_eq!(cut_piece.y, 1252);
+            }
+            _ => panic!("unexpected cut piece external_id"),
+        };
+    }
+}
