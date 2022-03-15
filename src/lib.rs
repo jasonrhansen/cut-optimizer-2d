@@ -1004,7 +1004,7 @@ impl Optimizer {
             self.optimize_with_stock_pieces::<B, _>(&self.stock_pieces.clone(), &callback)
         } else {
             // We're not allowing mixed sizes so just give an error result
-            // here. Each stock size will be optmized separately below.
+            // here. Each stock size will be optimized separately below.
             // Note: it's safe to assume `self.cut_pieces` isn't empty because
             // that's checked at the beginning of this function.
             Err(no_fit_for_cut_piece_error(&self.cut_pieces[0]))
