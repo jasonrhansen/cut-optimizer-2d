@@ -1610,7 +1610,7 @@ fn pighetti_github_issue_12() {
     let mut optimizer = Optimizer::new();
 
     let plywood = StockPiece {
-        quantity: Some(3),
+        quantity: Some(1),
         length: 2440,
         width: 1220,
         pattern_direction: PatternDirection::ParallelToLength,
