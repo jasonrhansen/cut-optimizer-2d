@@ -609,7 +609,7 @@ impl From<GuillotineBin> for ResultStockPiece {
             width: bin.width,
             length: bin.length,
             pattern_direction: bin.pattern_direction,
-            cut_pieces: bin.cut_pieces.into_iter().map(Into::into).collect(),
+            cut_pieces: bin.cut_pieces.iter().map(Into::into).collect(),
             waste_pieces: bin.free_rects,
             price: bin.price,
         }

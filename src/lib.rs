@@ -122,8 +122,8 @@ impl PartialEq for UsedCutPiece {
 }
 impl Eq for UsedCutPiece {}
 
-impl From<UsedCutPiece> for CutPieceWithId {
-    fn from(used_cut_piece: UsedCutPiece) -> Self {
+impl From<&UsedCutPiece> for CutPieceWithId {
+    fn from(used_cut_piece: &UsedCutPiece) -> Self {
         let (width, length, pattern_direction) = if used_cut_piece.is_rotated {
             (
                 used_cut_piece.rect.length,
@@ -149,8 +149,8 @@ impl From<UsedCutPiece> for CutPieceWithId {
     }
 }
 
-impl From<UsedCutPiece> for ResultCutPiece {
-    fn from(used_cut_piece: UsedCutPiece) -> Self {
+impl From<&UsedCutPiece> for ResultCutPiece {
+    fn from(used_cut_piece: &UsedCutPiece) -> Self {
         Self {
             external_id: used_cut_piece.external_id,
             x: used_cut_piece.rect.x,
@@ -690,7 +690,7 @@ where
 
         let mut removed_cut_pieces: Vec<CutPieceWithId> = Vec::new();
         for i in (0..cross_dest)
-            .chain(cross_dest + cross_src_end - cross_src_start..new_unit.bins.len())
+            .chain((cross_dest + cross_src_end - cross_src_start)..new_unit.bins.len())
             .rev()
         {
             let bin = &mut new_unit.bins[i];
@@ -702,10 +702,9 @@ where
                 // We found an available stock piece for this bin, so attempt to use it.
                 let injected_cut_pieces = (&other.bins[cross_src_start..cross_src_end])
                     .iter()
-                    .flat_map(Bin::cut_pieces)
-                    .cloned();
+                    .flat_map(Bin::cut_pieces);
                 if bin.remove_cut_pieces(injected_cut_pieces) > 0 {
-                    for cut_piece in bin.cut_pieces().cloned() {
+                    for cut_piece in bin.cut_pieces() {
                         removed_cut_pieces.push(cut_piece.into());
                     }
                     new_unit.bins.remove(i);
@@ -716,7 +715,7 @@ where
                 }
             } else {
                 // There's no available stock piece left for this bin so remove it.
-                for cut_piece in bin.cut_pieces().cloned() {
+                for cut_piece in bin.cut_pieces() {
                     removed_cut_pieces.push(cut_piece.into());
                 }
                 new_unit.bins.remove(i);
