@@ -233,6 +233,13 @@ impl StockPiece {
             *quantity -= 1;
         }
     }
+
+    /// Increment the quantity of this stock piece. If quantity is `None` it will remain `None`.
+    fn inc_quantity(&mut self) {
+        if let Some(ref mut quantity) = self.quantity {
+            *quantity += 1;
+        }
+    }
 }
 
 /// Stock piece that was used by the optimizer to get one or more cut pieces.
@@ -418,7 +425,6 @@ trait Bin {
     fn matches_stock_piece(&self, stock_piece: &StockPiece) -> bool;
 }
 
-#[derive(Debug)]
 struct OptimizerUnit<'a, B>
 where
     B: Bin,
@@ -649,18 +655,19 @@ where
         R: Rng + ?Sized,
         B: Clone,
     {
-        // If there aren't multiple bins we can't do a crossover, so just return a clone of this
-        // unit.
+        // If there aren't multiple bins we can't do a crossover,
+        // so just return a clone of this unit.
         if self.bins.len() < 2 && other.bins.len() < 2 {
             return self.clone();
         }
 
+        // Randomly select insertion point and range of bins to inject into the new unit.
         let cross_dest = rng.gen_range(0..=self.bins.len());
         let cross_src_start = rng.gen_range(0..other.bins.len());
         let cross_src_end = rng.gen_range(cross_src_start + 1..=other.bins.len());
 
+        // Create a new unit with the bins of `self` and some of the bins of `other` injected in.
         let mut new_unit = OptimizerUnit {
-            // Inject bins between crossing sites of other.
             bins: (&self.bins[..cross_dest])
                 .iter()
                 .chain((&other.bins[cross_src_start..cross_src_end]).iter())
@@ -668,10 +675,14 @@ where
                 .cloned()
                 .collect(),
             possible_stock_pieces: self.possible_stock_pieces,
+            // Make all possible stock pieces available initially. Quantities will be updated below.
             available_stock_pieces: self.possible_stock_pieces.to_vec(),
+            // Start with no unused cut pieces, and update below.
             unused_cut_pieces: Default::default(),
             blade_width: self.blade_width,
         };
+
+        let mut unused_cut_pieces = self.unused_cut_pieces.clone();
 
         // Update available stock piece quantities based on the injected bins.
         other.bins[cross_src_start..cross_src_end]
@@ -682,61 +693,66 @@ where
                     .iter_mut()
                     .find(|sp| bin.matches_stock_piece(sp))
                 {
+                    // Remove the injected cut pieces from the unused set.
+                    for cut_piece in bin.cut_pieces() {
+                        unused_cut_pieces.remove(&cut_piece.into());
+                    }
                     stock_piece.dec_quantity();
                 } else {
                     panic!("Attempt to inject invalid bin in crossover operation. This shouldn't happen, and means there is a bug in the code.");
                 }
             });
 
-        let mut removed_cut_pieces: Vec<CutPieceWithId> = Vec::new();
+        // Remove injected cut pieces from all non-injected bins,
+        // and update the available stock piece quantities.
         for i in (0..cross_dest)
             .chain((cross_dest + cross_src_end - cross_src_start)..new_unit.bins.len())
             .rev()
         {
             let bin = &mut new_unit.bins[i];
-            if let Some(ref mut stock_piece) = new_unit
+            let stock_piece = new_unit
                 .available_stock_pieces
                 .iter_mut()
-                .find(|sp| sp.quantity != Some(0) && bin.matches_stock_piece(sp))
-            {
-                // We found an available stock piece for this bin, so attempt to use it.
-                let injected_cut_pieces = (&other.bins[cross_src_start..cross_src_end])
-                    .iter()
-                    .flat_map(Bin::cut_pieces);
-                if bin.remove_cut_pieces(injected_cut_pieces) > 0 {
-                    for cut_piece in bin.cut_pieces() {
-                        removed_cut_pieces.push(cut_piece.into());
-                    }
-                    new_unit.bins.remove(i);
-                } else {
-                    // We're keeping this bin so decrement the quantity of the available stock
-                    // piece.
-                    stock_piece.dec_quantity();
-                }
+                .find(|sp| sp.quantity != Some(0) && bin.matches_stock_piece(sp));
+            let injected_cut_pieces = (&other.bins[cross_src_start..cross_src_end])
+                .iter()
+                .flat_map(Bin::cut_pieces);
+            let num_removed_cut_pieces = bin.remove_cut_pieces(injected_cut_pieces);
+
+            if let (0, Some(stock_piece)) = (num_removed_cut_pieces, stock_piece) {
+                // No cut pieces were removed from this bin, so we'll keep it
+                // and decrement the quantity of the available stock piece.
+                stock_piece.dec_quantity();
             } else {
-                // There's no available stock piece left for this bin so remove it.
+                // Either there were no available stock pieces, or there
+                // were cut pieces removed from this bin so we'll remove it
+                // and add its cut pieces to the unused set.
                 for cut_piece in bin.cut_pieces() {
-                    removed_cut_pieces.push(cut_piece.into());
+                    unused_cut_pieces.insert(cut_piece.into());
                 }
                 new_unit.bins.remove(i);
             }
         }
 
-        let unused_cut_pieces = removed_cut_pieces
-            .iter()
-            .chain(self.unused_cut_pieces.iter())
-            .chain(other.unused_cut_pieces.iter());
+        // Try to add all unused cut pieces.
+        unused_cut_pieces.retain(|cut_piece| !new_unit.first_fit_random_heuristics(cut_piece, rng));
+        new_unit.unused_cut_pieces = unused_cut_pieces;
 
-        for cut_piece in unused_cut_pieces {
-            if !new_unit.first_fit_random_heuristics(cut_piece, rng) {
-                new_unit.unused_cut_pieces.insert(cut_piece.clone());
+        // Remove bins that don't have cut pieces.
+        for i in (0..new_unit.bins.len()).rev() {
+            if new_unit.bins[i].cut_pieces().next().is_none() {
+                let bin = &mut new_unit.bins[i];
+                if let Some(ref mut stock_piece) = new_unit
+                    .available_stock_pieces
+                    .iter_mut()
+                    .find(|sp| sp.quantity != Some(0) && bin.matches_stock_piece(sp))
+                {
+                    // Make this stock piece available to use again.
+                    stock_piece.inc_quantity();
+                }
+                new_unit.bins.remove(i);
             }
         }
-
-        // Only keep bins that have cut_pieces
-        new_unit
-            .bins
-            .retain(|bin| bin.cut_pieces().next().is_some());
 
         new_unit
     }
