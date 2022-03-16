@@ -1683,3 +1683,64 @@ fn pighetti_github_issue_16() {
         sanity_check_solution(&solution, 6);
     }
 }
+
+#[test]
+fn deterministic_solutions() {
+    // Run the same optimization multiple times with the same random seed and
+    // check if the solution is the same each time.
+    let solutions: Vec<Solution> = (0..10)
+        .map(|_| {
+            let plywood = StockPiece {
+                quantity: Some(2),
+                length: 2440,
+                width: 1220,
+                pattern_direction: PatternDirection::ParallelToLength,
+                price: 130,
+            };
+
+            let cut_piece_a = CutPiece {
+                quantity: 6,
+                external_id: Some(1),
+                length: 814,
+                width: 465,
+                can_rotate: false,
+                pattern_direction: PatternDirection::ParallelToLength,
+            };
+
+            let mut optimizer = Optimizer::new();
+            optimizer.add_stock_piece(plywood);
+            optimizer.add_cut_piece(cut_piece_a);
+            optimizer.set_cut_width(2);
+            optimizer.set_random_seed(1);
+
+            optimizer.optimize_guillotine(|_| {}).unwrap()
+        })
+        .collect();
+
+    solutions.windows(2).for_each(|window| {
+        let solution1 = &window[0];
+        let solution2 = &window[1];
+        assert_eq!(solution1.fitness, solution2.fitness);
+        assert_eq!(solution1.price, solution2.price);
+        solution1
+            .stock_pieces
+            .iter()
+            .zip(solution2.stock_pieces.iter())
+            .for_each(|(stock_piece1, stock_piece2)| {
+                assert_eq!(stock_piece1.width, stock_piece2.width);
+                assert_eq!(stock_piece1.length, stock_piece2.length);
+                assert_eq!(
+                    stock_piece1.pattern_direction,
+                    stock_piece2.pattern_direction
+                );
+                assert_eq!(stock_piece1.price, stock_piece2.price);
+                stock_piece1
+                    .cut_pieces
+                    .iter()
+                    .zip(stock_piece2.cut_pieces.iter())
+                    .for_each(|(cut_piece1, cut_piece2)| {
+                        assert_eq!(cut_piece1, cut_piece2);
+                    });
+            })
+    });
+}

@@ -19,7 +19,6 @@ use rand::prelude::*;
 use rand::seq::SliceRandom;
 use std::borrow::Borrow;
 use std::cmp;
-use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 
 #[cfg(feature = "serialize")]
@@ -438,7 +437,7 @@ where
     available_stock_pieces: Vec<StockPiece>,
 
     // Cut pieces that couldn't be added to bins.
-    unused_cut_pieces: HashSet<CutPieceWithId>,
+    unused_cut_pieces: FnvHashSet<CutPieceWithId>,
 
     blade_width: usize,
 }
@@ -521,7 +520,7 @@ where
         blade_width: usize,
         random_seed: u64,
     ) -> Result<Vec<OptimizerUnit<'a, B>>> {
-        let mut set = HashSet::new();
+        let mut set = FnvHashSet::default();
         for cut_piece in &cut_pieces {
             set.insert((
                 cut_piece.width,
