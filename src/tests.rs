@@ -1639,6 +1639,7 @@ fn pighetti_github_issue_12() {
     optimizer.add_cut_piece(cut_piece_a);
     optimizer.add_cut_piece(cut_piece_b);
     optimizer.set_cut_width(2);
+    optimizer.set_random_seed(1);
 
     let result = optimizer.optimize_guillotine(|_| {});
 
@@ -1646,5 +1647,39 @@ fn pighetti_github_issue_12() {
     if let Ok(solution) = result {
         assert_eq!(solution.stock_pieces.len(), 1);
         sanity_check_solution(&solution, 37);
+    }
+}
+
+#[test]
+fn pighetti_github_issue_16() {
+    let plywood = StockPiece {
+        quantity: Some(2),
+        length: 2440,
+        width: 1220,
+        pattern_direction: PatternDirection::ParallelToLength,
+        price: 130,
+    };
+
+    let cut_piece_a = CutPiece {
+        quantity: 6,
+        external_id: Some(1),
+        length: 814,
+        width: 465,
+        can_rotate: false,
+        pattern_direction: PatternDirection::ParallelToLength,
+    };
+
+    let mut optimizer = Optimizer::new();
+    optimizer.add_stock_piece(plywood);
+    optimizer.add_cut_piece(cut_piece_a);
+    optimizer.set_cut_width(2);
+    optimizer.set_random_seed(1);
+
+    let result = optimizer.optimize_guillotine(|_| {});
+
+    assert!(result.is_ok());
+    if let Ok(solution) = result {
+        assert_eq!(solution.stock_pieces.len(), 2);
+        sanity_check_solution(&solution, 6);
     }
 }
