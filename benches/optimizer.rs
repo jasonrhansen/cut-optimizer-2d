@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use criterion::*;
 use cut_optimizer_2d::*;
 use rand::prelude::*;
@@ -77,5 +79,10 @@ pub fn benchmark_maxrects(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, benchmark_guillotine, benchmark_maxrects);
+criterion_group! {
+    name = benches;
+    config = Criterion::default().sample_size(100).measurement_time(Duration::from_secs(20));
+    targets = benchmark_guillotine, benchmark_maxrects
+}
+
 criterion_main!(benches);
