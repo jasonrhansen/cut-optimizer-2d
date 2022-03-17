@@ -5,6 +5,7 @@ use crate::guillotine::RotateCutPieceHeuristic;
 
 use rand::distributions::{Distribution, Standard};
 use rand::prelude::*;
+use smallvec::{smallvec, SmallVec};
 
 use std::borrow::Borrow;
 use std::cmp;
@@ -37,8 +38,8 @@ pub(crate) struct MaxRectsBin {
     length: usize,
     blade_width: usize,
     pattern_direction: PatternDirection,
-    cut_pieces: Vec<UsedCutPiece>,
-    free_rects: Vec<Rect>,
+    cut_pieces: SmallVec<[UsedCutPiece; 8]>,
+    free_rects: SmallVec<[Rect; 8]>,
     price: usize,
 }
 
@@ -60,7 +61,7 @@ impl Bin for MaxRectsBin {
             length,
         };
 
-        let free_rects = vec![free_rect];
+        let free_rects = smallvec![free_rect];
 
         MaxRectsBin {
             width,
@@ -693,7 +694,7 @@ impl From<MaxRectsBin> for ResultStockPiece {
             length: bin.length,
             pattern_direction: bin.pattern_direction,
             cut_pieces: bin.cut_pieces.iter().map(Into::into).collect(),
-            waste_pieces: bin.free_rects,
+            waste_pieces: bin.free_rects.into_vec(),
             price: bin.price,
         }
     }

@@ -10,13 +10,15 @@ mod maxrects;
 #[cfg(test)]
 mod tests;
 
-use fnv::FnvHashSet;
 use genetic::population::Population;
 use genetic::unit::Unit;
 use guillotine::GuillotineBin;
 use maxrects::MaxRectsBin;
+
+use fnv::FnvHashSet;
 use rand::prelude::*;
 use rand::seq::SliceRandom;
+
 use std::borrow::Borrow;
 use std::cmp;
 use std::hash::{Hash, Hasher};
@@ -450,7 +452,7 @@ where
         Self {
             bins: self.bins.clone(),
             possible_stock_pieces: self.possible_stock_pieces,
-            available_stock_pieces: self.available_stock_pieces.to_vec(),
+            available_stock_pieces: self.available_stock_pieces.clone(),
             unused_cut_pieces: self.unused_cut_pieces.clone(),
             blade_width: self.blade_width,
         }
