@@ -7,7 +7,7 @@ readme = "README.md"
 description = "A cut optimizer for cutting rectangular pieces from sheet goods"
 repository = "https://github.com/jasonrhansen/cut-optimizer-2d.git"
 keywords = ["cuts", "optimize", "optimization", "bin-packing", "bin-packer"]
-edition = "2018"
+edition = "2021"
 
 
 [features]
