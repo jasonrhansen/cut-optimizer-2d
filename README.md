@@ -1,3 +1,8 @@
+[![Worflows](https://github.com/jasonrhansen/cut-optimizer-2d/actions/workflows/rust.yml/badge.svg)](https://github.com/jasonrhansen/cut-optimizer-2d/actions)
+[![Crates.io](https://img.shields.io/crates/v/cut-optimizer-2d.svg)](https://crates.io/crates/cut-optimizer-2d)
+[![Documentation](https://docs.rs/cut-optimizer-2d/badge.svg)](https://docs.rs/cut-optimizer-2d/)
+[![Dependency status](https://deps.rs/repo/github/jasonrhansen/cut-optimizer-2d/status.svg)](https://deps.rs/repo/github/jasonrhansen/cut-optimizer-2d)
+
 # Cut Optimizer 2D
 
 ## Description
