@@ -669,10 +669,10 @@ where
 
         // Create a new unit with the bins of `self` and some of the bins of `other` injected in.
         let mut new_unit = OptimizerUnit {
-            bins: (&self.bins[..cross_dest])
+            bins: (self.bins[..cross_dest])
                 .iter()
-                .chain((&other.bins[cross_src_start..cross_src_end]).iter())
-                .chain((&self.bins[cross_dest..]).iter())
+                .chain((other.bins[cross_src_start..cross_src_end]).iter())
+                .chain((self.bins[cross_dest..]).iter())
                 .cloned()
                 .collect(),
             possible_stock_pieces: self.possible_stock_pieces,
@@ -715,7 +715,7 @@ where
                 .available_stock_pieces
                 .iter_mut()
                 .find(|sp| sp.quantity != Some(0) && bin.matches_stock_piece(sp));
-            let injected_cut_pieces = (&other.bins[cross_src_start..cross_src_end])
+            let injected_cut_pieces = (other.bins[cross_src_start..cross_src_end])
                 .iter()
                 .flat_map(Bin::cut_pieces);
             let num_removed_cut_pieces = bin.remove_cut_pieces(injected_cut_pieces);

@@ -131,7 +131,7 @@ impl Bin for GuillotineBin {
                 .iter()
                 .fold(0, |acc, fr| acc + fr.width as u64 * fr.length as u64) as f64;
 
-        (used_area / (used_area + free_area) as f64).powf(2.0 + self.free_rects.len() as f64 * 0.01)
+        (used_area / (used_area + free_area)).powf(2.0 + self.free_rects.len() as f64 * 0.01)
     }
 
     fn price(&self) -> usize {
@@ -511,12 +511,12 @@ impl GuillotineBin {
 
         // Use the given heuristic to decide which choice to make.
         let split_horizontal = match method {
-            SplitHeuristic::ShorterLeftoverAxis => (w <= h),
-            SplitHeuristic::LongerLeftoverAxis => (w > h),
-            SplitHeuristic::MinimizeArea => (rect.width as u64 * h > w * rect.length as u64),
-            SplitHeuristic::MaximizeArea => (rect.width as u64 * h <= w * rect.length as u64),
-            SplitHeuristic::ShorterAxis => (free_rect.width as u64 <= free_rect.length as u64),
-            SplitHeuristic::LongerAxis => (free_rect.width as u64 > free_rect.length as u64),
+            SplitHeuristic::ShorterLeftoverAxis => w <= h,
+            SplitHeuristic::LongerLeftoverAxis => w > h,
+            SplitHeuristic::MinimizeArea => rect.width as u64 * h > w * rect.length as u64,
+            SplitHeuristic::MaximizeArea => rect.width as u64 * h <= w * rect.length as u64,
+            SplitHeuristic::ShorterAxis => free_rect.width as u64 <= free_rect.length as u64,
+            SplitHeuristic::LongerAxis => free_rect.width as u64 > free_rect.length as u64,
         };
 
         let split_axis = if split_horizontal {

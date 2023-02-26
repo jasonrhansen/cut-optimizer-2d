@@ -320,9 +320,9 @@ impl MaxRectsBin {
             let fit = free_rect.fit_cut_piece(self.pattern_direction, cut_piece, prefer_rotated);
             if fit.is_upright() {
                 let leftover_horiz =
-                    (free_rect.width as isize - cut_piece.width as isize).abs() as usize;
+                    (free_rect.width as isize - cut_piece.width as isize).unsigned_abs();
                 let leftover_vert =
-                    (free_rect.length as isize - cut_piece.length as isize).abs() as usize;
+                    (free_rect.length as isize - cut_piece.length as isize).unsigned_abs();
                 let short_side_fit = cmp::min(leftover_horiz, leftover_vert);
                 let long_side_fit = cmp::max(leftover_horiz, leftover_vert);
 
@@ -339,9 +339,9 @@ impl MaxRectsBin {
                 }
             } else if fit.is_rotated() {
                 let leftover_horiz =
-                    (free_rect.width as isize - cut_piece.length as isize).abs() as usize;
+                    (free_rect.width as isize - cut_piece.length as isize).unsigned_abs();
                 let leftover_vert =
-                    (free_rect.length as isize - cut_piece.width as isize).abs() as usize;
+                    (free_rect.length as isize - cut_piece.width as isize).unsigned_abs();
                 let short_side_fit = cmp::min(leftover_horiz, leftover_vert);
                 let long_side_fit = cmp::max(leftover_horiz, leftover_vert);
 
@@ -380,9 +380,9 @@ impl MaxRectsBin {
             let fit = free_rect.fit_cut_piece(self.pattern_direction, cut_piece, prefer_rotated);
             if fit.is_upright() {
                 let leftover_horiz =
-                    (free_rect.width as isize - cut_piece.width as isize).abs() as usize;
+                    (free_rect.width as isize - cut_piece.width as isize).unsigned_abs();
                 let leftover_vert =
-                    (free_rect.length as isize - cut_piece.length as isize).abs() as usize;
+                    (free_rect.length as isize - cut_piece.length as isize).unsigned_abs();
                 let short_side_fit = cmp::min(leftover_horiz, leftover_vert);
                 let long_side_fit = cmp::max(leftover_horiz, leftover_vert);
 
@@ -399,9 +399,9 @@ impl MaxRectsBin {
                 }
             } else if fit.is_rotated() {
                 let leftover_horiz =
-                    (free_rect.width as isize - cut_piece.length as isize).abs() as usize;
+                    (free_rect.width as isize - cut_piece.length as isize).unsigned_abs();
                 let leftover_vert =
-                    (free_rect.length as isize - cut_piece.width as isize).abs() as usize;
+                    (free_rect.length as isize - cut_piece.width as isize).unsigned_abs();
                 let short_side_fit = cmp::min(leftover_horiz, leftover_vert);
                 let long_side_fit = cmp::max(leftover_horiz, leftover_vert);
 
@@ -448,9 +448,9 @@ impl MaxRectsBin {
 
             let fit = free_rect.fit_cut_piece(self.pattern_direction, cut_piece, prefer_rotated);
             if fit.is_upright() {
-                let leftover_horiz = (free_rect.width as i64 - cut_piece.width as i64).abs() as u64;
+                let leftover_horiz = (free_rect.width as i64 - cut_piece.width as i64).unsigned_abs();
                 let leftover_vert =
-                    (free_rect.length as i64 - cut_piece.length as i64).abs() as u64;
+                    (free_rect.length as i64 - cut_piece.length as i64).unsigned_abs();
                 let short_side_fit = cmp::min(leftover_horiz, leftover_vert);
 
                 if area_fit < best_area_fit
@@ -466,8 +466,8 @@ impl MaxRectsBin {
                 }
             } else if fit.is_rotated() {
                 let leftover_horiz =
-                    (free_rect.width as i64 - cut_piece.length as i64).abs() as u64;
-                let leftover_vert = (free_rect.length as i64 - cut_piece.width as i64).abs() as u64;
+                    (free_rect.width as i64 - cut_piece.length as i64).unsigned_abs();
+                let leftover_vert = (free_rect.length as i64 - cut_piece.width as i64).unsigned_abs();
                 let short_side_fit = cmp::min(leftover_horiz, leftover_vert);
 
                 if area_fit < best_area_fit
