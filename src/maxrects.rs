@@ -448,7 +448,8 @@ impl MaxRectsBin {
 
             let fit = free_rect.fit_cut_piece(self.pattern_direction, cut_piece, prefer_rotated);
             if fit.is_upright() {
-                let leftover_horiz = (free_rect.width as i64 - cut_piece.width as i64).unsigned_abs();
+                let leftover_horiz =
+                    (free_rect.width as i64 - cut_piece.width as i64).unsigned_abs();
                 let leftover_vert =
                     (free_rect.length as i64 - cut_piece.length as i64).unsigned_abs();
                 let short_side_fit = cmp::min(leftover_horiz, leftover_vert);
@@ -467,7 +468,8 @@ impl MaxRectsBin {
             } else if fit.is_rotated() {
                 let leftover_horiz =
                     (free_rect.width as i64 - cut_piece.length as i64).unsigned_abs();
-                let leftover_vert = (free_rect.length as i64 - cut_piece.width as i64).unsigned_abs();
+                let leftover_vert =
+                    (free_rect.length as i64 - cut_piece.width as i64).unsigned_abs();
                 let short_side_fit = cmp::min(leftover_horiz, leftover_vert);
 
                 if area_fit < best_area_fit
