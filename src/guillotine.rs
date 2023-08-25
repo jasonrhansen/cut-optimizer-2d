@@ -820,6 +820,6 @@ mod tests {
 
         stock_pieces
             .iter()
-            .for_each(|stock_piece| assert!(!bin.matches_stock_piece(&stock_piece)))
+            .for_each(|stock_piece| assert!(!bin.matches_stock_piece(stock_piece)))
     }
 }

@@ -106,26 +106,11 @@ mod tests {
     fn basic_algorithm_test() {
         let towards = 10.0;
         let test_vec = vec![
-            TendUnit {
-                x: 0.3,
-                towards: towards,
-            },
-            TendUnit {
-                x: 0.1,
-                towards: towards,
-            },
-            TendUnit {
-                x: 0.7,
-                towards: towards,
-            },
-            TendUnit {
-                x: 2.3,
-                towards: towards,
-            },
-            TendUnit {
-                x: 4.3,
-                towards: towards,
-            },
+            TendUnit { x: 0.3, towards },
+            TendUnit { x: 0.1, towards },
+            TendUnit { x: 0.7, towards },
+            TendUnit { x: 2.3, towards },
+            TendUnit { x: 4.3, towards },
         ];
 
         let best_unit = Population::new(test_vec.clone())
@@ -143,16 +128,7 @@ mod tests {
     #[test]
     fn no_survivors_test() {
         let towards = 10.0;
-        let test_vec = vec![
-            TendUnit {
-                x: 0.3,
-                towards: towards,
-            },
-            TendUnit {
-                x: 0.7,
-                towards: towards,
-            },
-        ];
+        let test_vec = vec![TendUnit { x: 0.3, towards }, TendUnit { x: 0.7, towards }];
 
         let best_unit = Population::new(test_vec.clone())
             .set_size(100)

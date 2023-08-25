@@ -105,8 +105,8 @@ fn sanity_check_solution(solution: &Solution, num_cut_pieces: usize) {
 #[test]
 fn guillotine() {
     let solution = Optimizer::new()
-        .add_stock_pieces(STOCK_PIECES.iter().cloned().collect::<Vec<_>>())
-        .add_cut_pieces(CUT_PIECES.iter().cloned().collect::<Vec<_>>())
+        .add_stock_pieces(STOCK_PIECES.to_vec())
+        .add_cut_pieces(CUT_PIECES.to_vec())
         .set_cut_width(1)
         .set_random_seed(1)
         .optimize_guillotine(|_| {})
@@ -316,7 +316,7 @@ fn guillotine_non_fitting_cut_piece_mismatched_pattern() {
 #[test]
 fn guillotine_no_allow_mixed_stock_sizes() {
     let solution = Optimizer::new()
-        .add_stock_pieces(STOCK_PIECES.iter().cloned().collect::<Vec<_>>())
+        .add_stock_pieces(STOCK_PIECES.to_vec())
         .add_cut_piece(CutPiece {
             quantity: 1,
             external_id: Some(1),
@@ -851,8 +851,8 @@ fn guillotine_random_cut_pieces() {
 #[test]
 fn nested() {
     let solution = Optimizer::new()
-        .add_stock_pieces(STOCK_PIECES.iter().cloned().collect::<Vec<_>>())
-        .add_cut_pieces(CUT_PIECES.iter().cloned().collect::<Vec<_>>())
+        .add_stock_pieces(STOCK_PIECES.to_vec())
+        .add_cut_pieces(CUT_PIECES.to_vec())
         .set_cut_width(1)
         .set_random_seed(1)
         .optimize_nested(|_| {})
@@ -1067,7 +1067,7 @@ fn nested_non_fitting_cut_piece_mismatched_pattern() {
 #[test]
 fn nested_no_allow_mixed_stock_sizes() {
     let solution = Optimizer::new()
-        .add_stock_pieces(STOCK_PIECES.iter().cloned().collect::<Vec<_>>())
+        .add_stock_pieces(STOCK_PIECES.to_vec())
         .add_cut_piece(CutPiece {
             quantity: 1,
             external_id: Some(1),

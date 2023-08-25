@@ -29,9 +29,10 @@ use serde::{Deserialize, Serialize};
 /// Indicates the linear direction of a pattern, grain, etc.
 #[cfg_attr(feature = "serialize", derive(Deserialize, Serialize))]
 #[cfg_attr(feature = "serialize", serde(rename_all = "camelCase"))]
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, Default, Hash, PartialEq, Eq)]
 pub enum PatternDirection {
     /// No pattern
+    #[default]
     None,
 
     /// Linear pattern that runs parallel to the width
@@ -49,12 +50,6 @@ impl PatternDirection {
             PatternDirection::ParallelToWidth => PatternDirection::ParallelToLength,
             PatternDirection::ParallelToLength => PatternDirection::ParallelToWidth,
         }
-    }
-}
-
-impl Default for PatternDirection {
-    fn default() -> Self {
-        PatternDirection::None
     }
 }
 
